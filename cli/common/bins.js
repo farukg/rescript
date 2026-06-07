@@ -1,5 +1,8 @@
 // @ts-check
 
+import * as fs from "node:fs";
+import * as path from "node:path";
+
 const minimumNodeVersion = "20.11.0";
 
 /**
@@ -36,18 +39,43 @@ if (supportedPlatforms.includes(target)) {
   throw new Error(`Platform ${target} is not supported!`);
 }
 
-export const {
-  binDir,
-  binPaths: {
-    bsb_helper_exe,
-    bsc_exe,
-    ninja_exe,
-    rescript_editor_analysis_exe,
-    rescript_tools_exe,
-    rescript_legacy_exe,
-    rescript_exe,
-  },
-} = mod;
+export const { binDir, binPaths } = mod;
+
+const {
+  bsb_helper_exe,
+  bsc_exe,
+  ninja_exe,
+  rescript_editor_analysis_exe,
+  rescript_tools_exe,
+  rescript_legacy_exe,
+  rescript_exe: upstream_rescript_exe,
+} = binPaths;
+
+export {
+  bsb_helper_exe,
+  bsc_exe,
+  ninja_exe,
+  rescript_editor_analysis_exe,
+  rescript_tools_exe,
+  rescript_legacy_exe,
+};
+
+// SIG patched rewatch binary: prefer the one shipped with the rescript package itself
+const patchedRescriptExe = path.join(
+  import.meta.dirname,
+  "..",
+  "..",
+  "packages",
+  "@rescript",
+  target,
+  "bin",
+  "rescript.exe"
+);
+
+export const rescript_exe =
+  target === "linux-x64" && fs.existsSync(patchedRescriptExe)
+    ? patchedRescriptExe
+    : upstream_rescript_exe;
 
 function checkNodeVersionSupported() {
   if (

@@ -263,12 +263,14 @@ pub fn incremental_build(
             only_incremental,
             create_sourcedirs,
             plain_output,
+            false,
         )
     })
 }
 
 // `build` needs to lock before initialization because initialization mutates previous
 // build artifacts. Keep the compile body separate so it can run under that wider lock.
+#[allow(clippy::too_many_arguments)]
 pub fn incremental_build_without_lock(
     build_state: &mut BuildCommandState,
     default_timing: Option<Duration>,
@@ -277,6 +279,9 @@ pub fn incremental_build_without_lock(
     only_incremental: bool,
     create_sourcedirs: bool,
     plain_output: bool,
+    // When true, abort on the first compile error. When false (the default),
+    // keep scheduling every compilable module so all errors are collected.
+    exit_after_first_error: bool,
 ) -> Result<(), IncrementalBuildError> {
     logs::initialize(&build_state.packages);
     let num_dirty_modules = build_state.modules.values().filter(|m| is_dirty(m)).count() as u64;
@@ -383,6 +388,7 @@ pub fn incremental_build_without_lock(
         show_progress,
         || pb.inc(1),
         |size| pb.set_length(size),
+        exit_after_first_error,
     )
     .map_err(|e| IncrementalBuildError {
         kind: IncrementalBuildErrorKind::CompileError(Some(e.to_string())),
@@ -543,6 +549,7 @@ pub fn build(
     create_sourcedirs: bool,
     plain_output: bool,
     warn_error: Option<String>,
+    exit_after_first_error: bool,
 ) -> Result<BuildCommandState> {
     let default_timing: Option<std::time::Duration> = if no_timing {
         Some(std::time::Duration::new(0.0 as u64, 0.0 as u32))
@@ -569,6 +576,7 @@ pub fn build(
             false,
             create_sourcedirs,
             plain_output,
+            exit_after_first_error,
         ) {
             Ok(_) => {
                 if !plain_output && show_progress {
@@ -651,7 +659,16 @@ mod tests {
         let build_thread = thread::spawn(move || {
             // This temp project has no config, so initialization would fail immediately
             // if `build` did not wait for the lock first.
-            let result = build(&None, &build_project_folder, false, true, false, true, None);
+            let result = build(
+                &None,
+                &build_project_folder,
+                false,
+                true,
+                false,
+                true,
+                None,
+                false,
+            );
             sender.send(result.is_err()).expect("result should be sent");
         });
 

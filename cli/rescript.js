@@ -3,7 +3,7 @@
 // @ts-check
 
 import * as child_process from "node:child_process";
-import { rescript_exe } from "./common/bins.js";
+import { rescript_exe, binPaths } from "./common/bins.js";
 import { runtimePath } from "./common/runtime.js";
 
 const args = process.argv.slice(2);
@@ -19,7 +19,11 @@ const args = process.argv.slice(2);
 //   exit the parent with the correct status only after the child has exited.
 const child = child_process.spawn(rescript_exe, args, {
   stdio: "inherit",
-  env: { ...process.env, RESCRIPT_RUNTIME: runtimePath },
+  env: {
+    ...process.env,
+    RESCRIPT_RUNTIME: runtimePath,
+    RESCRIPT_BSC_EXE: binPaths.bsc_exe,
+  },
 });
 
 // Map POSIX signal names to conventional exit status numbers so we can

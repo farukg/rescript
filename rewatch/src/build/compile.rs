@@ -77,6 +77,11 @@ pub fn compile(
     show_progress: bool,
     inc: impl Fn() + std::marker::Sync,
     set_length: impl Fn(u64),
+    // When true, abort compilation as soon as the first compile error is hit.
+    // When false (the default), the loop keeps scheduling every module whose
+    // dependencies are already compiled, so all diagnosable errors are
+    // collected before the build reports them.
+    exit_after_first_error: bool,
 ) -> anyhow::Result<(String, String, usize)> {
     let mut compiled_modules = AHashSet::<String>::new();
     let dirty_modules = build_state
@@ -436,9 +441,15 @@ pub fn compile(
                 }
             }
 
-            compile_errors.push_str(&message)
+            compile_errors.push_str(&message);
+
+            // A circular dependency is a hard deadlock: no further module can
+            // ever make progress, so terminate unconditionally — independent of
+            // the error-mode flag. Without this break, continuing the loop would
+            // re-detect the same cycle on every iteration and hang forever.
+            break;
         }
-        if !compile_errors.is_empty() {
+        if !compile_errors.is_empty() && exit_after_first_error {
             break;
         };
     }
