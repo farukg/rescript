@@ -77,6 +77,7 @@ pub fn compile(
     show_progress: bool,
     inc: impl Fn() + std::marker::Sync,
     set_length: impl Fn(u64),
+    continue_after_errors: bool,
 ) -> anyhow::Result<(String, String, usize)> {
     let mut compiled_modules = AHashSet::<String>::new();
     let dirty_modules = build_state
@@ -438,7 +439,7 @@ pub fn compile(
 
             compile_errors.push_str(&message)
         }
-        if !compile_errors.is_empty() {
+        if !compile_errors.is_empty() && !continue_after_errors {
             break;
         };
     }
