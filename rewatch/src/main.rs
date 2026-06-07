@@ -75,6 +75,7 @@ fn main() -> Result<()> {
                 true, // create_sourcedirs is now always enabled
                 plain_output,
                 (*build_args.warn_error).clone(),
+                build_args.continue_after_errors,
             ) {
                 Err(e) => {
                     eprintln!("{:#}", e);
