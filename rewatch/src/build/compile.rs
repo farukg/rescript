@@ -348,6 +348,7 @@ pub fn compile(
     show_progress: bool,
     inc: impl Fn() + std::marker::Sync,
     set_length: impl Fn(u64),
+    continue_after_errors: bool,
 ) -> anyhow::Result<(String, String, usize)> {
     let dirty_modules = build_state
         .modules
@@ -431,7 +432,7 @@ pub fn compile(
     rayon::in_place_scope(|scope| {
         let mut in_flight: usize = 0;
         loop {
-            while in_flight < capacity && !has_errors {
+            while in_flight < capacity && (!has_errors || continue_after_errors) {
                 let Some(work) = ready_heap.pop() else { break };
                 let module_name = work.module_name.clone();
                 let is_dirty = dirty_set.contains(&module_name);

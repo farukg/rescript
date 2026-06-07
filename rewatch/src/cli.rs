@@ -260,6 +260,10 @@ pub struct BuildArgs {
     /// Skip dev-dependencies and dev sources (type: "dev")
     #[arg(long, default_value_t = false)]
     pub prod: bool,
+
+    /// Continue scheduling compile jobs after errors to report every schedulable diagnostic.
+    #[arg(long, default_value_t = false)]
+    pub continue_after_errors: bool,
 }
 
 #[cfg(test)]
@@ -529,6 +533,17 @@ mod tests {
                 build_args.features.parsed(),
                 Some(vec!["native".to_string(), "experimental".to_string()])
             ),
+            other => panic!("expected build command, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn build_continue_after_errors_flag_is_parsed() {
+        let cli = parse(&["rescript", "build", "--continue-after-errors"])
+            .expect("expected build command");
+
+        match cli.command {
+            Command::Build(build_args) => assert!(build_args.continue_after_errors),
             other => panic!("expected build command, got {other:?}"),
         }
     }

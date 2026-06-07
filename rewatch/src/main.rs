@@ -74,6 +74,7 @@ fn run_main(otel_enabled: bool) -> i32 {
                 (*build_args.warn_error).clone(),
                 build_args.prod,
                 features,
+                build_args.continue_after_errors,
             );
             if result.is_ok()
                 && let Some(args_after_build) = (*build_args.after_build).clone()

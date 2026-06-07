@@ -518,6 +518,7 @@ async fn async_watch(
                         false,
                         create_sourcedirs,
                         plain_output,
+                        false,
                     );
                     build::write_build_ninja(&build_state);
                     result
@@ -610,6 +611,7 @@ pub fn start(
                     false,
                     create_sourcedirs,
                     plain_output,
+                    false,
                 )
                 .ok()
                 .map(|result| (timing_total, result));
