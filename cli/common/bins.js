@@ -1,5 +1,7 @@
 // @ts-check
 
+import * as fs from "node:fs";
+
 const minimumNodeVersion = "20.11.0";
 
 /**
@@ -45,9 +47,26 @@ export const {
     rescript_editor_analysis_exe,
     rescript_tools_exe,
     rescript_legacy_exe,
-    rescript_exe,
+    rescript_exe: upstream_rescript_exe,
   },
 } = mod;
+
+// SIG patched rewatch binary: prefer the one shipped with the rescript package itself
+const patchedRescriptExe = path.join(
+  import.meta.dirname,
+  "..",
+  "..",
+  "packages",
+  "@rescript",
+  target,
+  "bin",
+  "rescript.exe"
+);
+
+export const rescript_exe =
+  target === "linux-x64" && fs.existsSync(patchedRescriptExe)
+    ? patchedRescriptExe
+    : upstream_rescript_exe;
 
 function checkNodeVersionSupported() {
   if (
