@@ -185,7 +185,9 @@ let rec translate_module_binding ~(config : GenTypeConfig.t)
              ~output_file_relative ~resolver ~type_env
         |> Translation.combine
       in
-      match (config.runtime_safety, explicitly_exported, translation.code_items) with
+      (match
+         (config.runtime_safety, explicitly_exported, translation.code_items)
+       with
       | Strict, true, _ :: _ ->
         Location.raise_errorf ~loc:mb_expr.mod_loc
           "genType runtime safety: module alias '%s' cannot export runtime \
@@ -194,7 +196,7 @@ let rec translate_module_binding ~(config : GenTypeConfig.t)
            real wrapper module."
           name
       | Strict, _, _ -> {translation with code_items = []}
-      | LegacyEager, _, _ -> translation
+      | LegacyEager, _, _ -> translation)
     | Mty_alias _ | Mty_ident _ | Mty_functor _ -> Translation.empty)
   | Tmod_structure structure ->
     let is_let_private =
