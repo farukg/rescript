@@ -1,8 +1,6 @@
 name: Build and Release Rewatch
 
 on:
-  push:
-    branches: [master, sig/continue-after-errors-v12]
   workflow_dispatch:
 
 jobs:

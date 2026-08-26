@@ -470,6 +470,42 @@ jobs:
           name: api
           path: scripts/res/apiDocs/
 
+  release-patched-toolchains:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs:
+      - build-compiler
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download platform binaries
+        uses: actions/download-artifact@v7
+        with:
+          pattern: binaries-*
+          path: artifacts
+
+      - name: Name release assets
+        run: |
+          mkdir -p release-binaries
+          for dir in artifacts/binaries-*; do
+            platform="${dir#artifacts/binaries-}"
+            for binary in "$dir"/*.exe; do
+              name="$(basename "$binary" .exe)"
+              cp "$binary" "release-binaries/${name}-${platform}.exe"
+            done
+          done
+
+      - name: Update patched toolchain release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: patched
+          name: Patched ReScript Toolchains
+          body: Full platform toolchains built and verified from ${{ github.sha }}.
+          files: release-binaries/*
+          draft: false
+          prerelease: true
+          fail_on_unmatched_files: true
+
   pkg-pr-new:
     needs:
       - build-compiler
