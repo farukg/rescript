@@ -70,11 +70,18 @@ function getBinDir() {
   );
 }
 
-function binaryExists() {
+function installedToolchainMatchesExpected() {
   const binDir = getBinDir();
   if (!binDir) return false;
-  return BINARIES.every((binary) =>
-    fs.existsSync(path.join(binDir, `${binary}.exe`))
+  const expectedSha = expectedSourceSha();
+  const sourceShaPath = path.join(binDir, SOURCE_SHA_ASSET);
+  if (!expectedSha || !fs.existsSync(sourceShaPath)) return false;
+  const installedSha = fs.readFileSync(sourceShaPath, "utf8").trim().toLowerCase();
+  return (
+    installedSha.startsWith(expectedSha) &&
+    BINARIES.every((binary) =>
+      fs.existsSync(path.join(binDir, `${binary}.exe`))
+    )
   );
 }
 
@@ -96,7 +103,9 @@ async function downloadToolchain() {
   }
 
   const binDir = getBinDir();
-  const stagingDir = path.join(binDir, `.install-${process.pid}`);
+  const binParentDir = path.dirname(binDir);
+  const stagingDir = path.join(binParentDir, `.bin-install-${process.pid}`);
+  const previousDir = path.join(binParentDir, `.bin-previous-${process.pid}`);
   const expectedSha = expectedSourceSha();
 
   console.log(
@@ -104,7 +113,7 @@ async function downloadToolchain() {
   );
 
   try {
-    fs.mkdirSync(binDir, { recursive: true });
+    fs.mkdirSync(binParentDir, { recursive: true });
     fs.mkdirSync(stagingDir);
     const sourceShaPath = path.join(stagingDir, SOURCE_SHA_ASSET);
     await downloadFile(
@@ -124,19 +133,36 @@ async function downloadToolchain() {
       await downloadFile(url, staged);
       fs.chmodSync(staged, 0o755);
     }
-    for (const binary of BINARIES) {
-      const filename = `${binary}.exe`;
-      const destination = path.join(binDir, filename);
-      if (fs.existsSync(destination)) {
-        fs.unlinkSync(destination);
-      }
-      fs.renameSync(path.join(stagingDir, filename), destination);
+    if (fs.existsSync(previousDir)) {
+      fs.rmSync(previousDir, { recursive: true, force: true });
     }
-    fs.rmdirSync(stagingDir);
+    if (fs.existsSync(binDir)) {
+      fs.renameSync(binDir, previousDir);
+    }
+    try {
+      fs.renameSync(stagingDir, binDir);
+    } catch (err) {
+      if (fs.existsSync(previousDir) && !fs.existsSync(binDir)) {
+        fs.renameSync(previousDir, binDir);
+      }
+      throw err;
+    }
+    try {
+      fs.rmSync(previousDir, { recursive: true, force: true });
+    } catch (err) {
+      console.warn(
+        `[rescript-patched] Toolchain activated, but the previous directory could not be removed: ${err.message}`
+      );
+    }
     console.log(`[rescript-patched] Toolchain installed to ${binDir}`);
     return true;
   } catch (err) {
     fs.rmSync(stagingDir, { recursive: true, force: true });
+    if (fs.existsSync(previousDir) && !fs.existsSync(binDir)) {
+      fs.renameSync(previousDir, binDir);
+    } else if (fs.existsSync(previousDir)) {
+      fs.rmSync(previousDir, { recursive: true, force: true });
+    }
     console.warn(
       `[rescript-patched] Download failed: ${err.message}. Trying source build...`
     );
@@ -167,7 +193,7 @@ async function main() {
     return;
   }
 
-  if (binaryExists()) {
+  if (installedToolchainMatchesExpected()) {
     console.log(`[rescript-patched] Toolchain already exists, skipping.`);
     return;
   }
