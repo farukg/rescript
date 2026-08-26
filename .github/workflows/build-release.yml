@@ -32,6 +32,8 @@ jobs:
         with:
           ocaml-compiler: ocaml-variants.5.3.0+options,ocaml-option-static
           opam-pin: false
+          dune-cache: true
+          cache-prefix: patched-linux-x64-v1
 
       - name: Install project dependencies
         run: |
@@ -43,6 +45,19 @@ jobs:
 
       - name: Copy compiler binaries
         run: node scripts/copyExes.js --compiler
+
+      - name: Restore rewatch build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            rewatch/target
+          key: patched-linux-x64-rewatch-rust-1.91-${{ hashFiles('rewatch/Cargo.lock', 'rewatch/Cargo.toml') }}-${{ github.sha }}
+          restore-keys: |
+            patched-linux-x64-rewatch-rust-1.91-${{ hashFiles('rewatch/Cargo.lock', 'rewatch/Cargo.toml') }}-
+            patched-linux-x64-rewatch-rust-1.91-
 
       - name: Build rewatch
         run: |
