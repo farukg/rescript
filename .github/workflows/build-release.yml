@@ -34,6 +34,12 @@ jobs:
           opam-pin: false
           dune-cache: true
 
+      - name: Restore project opam dependencies
+        uses: actions/cache@v4
+        with:
+          path: _opam
+          key: linux-x64-opam-ocaml-5.3-static-${{ hashFiles('*.opam') }}
+
       - name: Install project dependencies
         run: |
           yarn install
