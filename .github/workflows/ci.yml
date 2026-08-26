@@ -364,7 +364,7 @@ jobs:
 
       - name: Run gentype tests
         if: runner.os != 'Windows'
-        run: make -C tests/gentype_tests/typescript-react-example clean test
+        run: make test-gentype
 
       # On Windows, after running setup-ocaml (if it wasn't cached yet or the cache couldn't be restored),
       # Cygwin bash is used instead of Git Bash for Windows, breaking the rewatch tests.

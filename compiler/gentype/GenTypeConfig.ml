@@ -1,6 +1,7 @@
 module ModuleNameMap = Map.Make (ModuleName)
 
 type module_ = CommonJS | ESModule
+type runtime_safety = LegacyEager | Strict
 
 (** Compatibility for `compilerOptions.moduleResolution` in TypeScript projects. *)
 type module_resolution =
@@ -26,6 +27,7 @@ type t = {
   namespace: string option;
   platform_lib: string;
   mutable project_root: string;
+  runtime_safety: runtime_safety;
   shims_map: ModuleName.t ModuleNameMap.t;
   sources: Ext_json_types.t option;
   suffix: string;
@@ -46,6 +48,7 @@ let default =
     namespace = None;
     platform_lib = "";
     project_root = "";
+    runtime_safety = LegacyEager;
     shims_map = ModuleNameMap.empty;
     sources = None;
     suffix = ".bs.js";
@@ -131,6 +134,7 @@ let read_config ~get_config_file ~namespace =
     let module_resolution_string =
       gtconf |> get_string_option "moduleResolution"
     in
+    let runtime_safety_string = gtconf |> get_string_option "runtimeSafety" in
     let export_interfaces_bool = gtconf |> get_bool "exportInterfaces" in
     let generated_file_extension_string_option =
       gtconf |> get_string_option "generatedFileExtension"
@@ -170,6 +174,11 @@ let read_config ~get_config_file ~namespace =
       | Some "node16" -> Node16
       | Some "bundler" -> Bundler
       | _ -> default.module_resolution
+    in
+    let runtime_safety =
+      match runtime_safety_string with
+      | Some "strict" -> Strict
+      | _ -> default.runtime_safety
     in
     let export_interfaces =
       match export_interfaces_bool with
@@ -237,6 +246,7 @@ let read_config ~get_config_file ~namespace =
       namespace;
       platform_lib;
       project_root;
+      runtime_safety;
       shims_map;
       sources;
     }

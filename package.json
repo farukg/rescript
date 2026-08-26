@@ -81,14 +81,14 @@
     "#dev/*": "./lib_dev/*.js"
   },
   "dependencies": {
-    "@rescript/runtime": "12.3.0"
+    "@rescript/runtime": "workspace:packages/@rescript/runtime"
   },
   "optionalDependencies": {
-    "@rescript/darwin-arm64": "12.3.0",
-    "@rescript/darwin-x64": "12.3.0",
-    "@rescript/linux-arm64": "12.3.0",
-    "@rescript/linux-x64": "12.3.0",
-    "@rescript/win32-x64": "12.3.0"
+    "@rescript/darwin-arm64": "workspace:packages/@rescript/darwin-arm64",
+    "@rescript/darwin-x64": "workspace:packages/@rescript/darwin-x64",
+    "@rescript/linux-arm64": "workspace:packages/@rescript/linux-arm64",
+    "@rescript/linux-x64": "workspace:packages/@rescript/linux-x64",
+    "@rescript/win32-x64": "workspace:packages/@rescript/win32-x64"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
@@ -100,6 +100,17 @@
     "semver": "^7.7.2",
     "typescript": "5.9.3"
   },
+  "workspaces": [
+    "packages/playground",
+    "packages/@rescript/*",
+    "tests/dependencies/**",
+    "tests/analysis_tests/**",
+    "tests/docstring_tests",
+    "tests/gentype_tests/**",
+    "tests/tools_tests",
+    "tests/commonjs_tests",
+    "scripts/res"
+  ],
   "packageManager": "yarn@4.10.3",
   "preferUnplugged": true
 }

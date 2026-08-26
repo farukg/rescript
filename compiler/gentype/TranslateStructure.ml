@@ -165,6 +165,9 @@ let rec translate_module_binding ~(config : GenTypeConfig.t)
   let name = mb_id |> Ident.name in
   if !Debug.translation then Log_.item "Translate Module Binding %s\n" name;
   let module_item = Runtime.new_module_item ~name in
+  let explicitly_exported =
+    mb_attributes |> Annotation.has_attribute Annotation.tag_is_gentype
+  in
   let config = mb_attributes |> Annotation.update_config_for_module ~config in
   type_env |> TypeEnv.update_module_item ~module_item;
   let type_env = type_env |> TypeEnv.new_module ~name in
@@ -176,10 +179,22 @@ let rec translate_module_binding ~(config : GenTypeConfig.t)
     match Env.scrape_alias mb_expr.mod_env mb_expr.mod_type with
     | Mty_signature signature ->
       (* Treat module M = N as include N *)
-      signature
-      |> TranslateSignatureFromTypes.translate_signature_from_types ~config
-           ~output_file_relative ~resolver ~type_env
-      |> Translation.combine
+      let translation =
+        signature
+        |> TranslateSignatureFromTypes.translate_signature_from_types ~config
+             ~output_file_relative ~resolver ~type_env
+        |> Translation.combine
+      in
+      match (config.runtime_safety, explicitly_exported, translation.code_items) with
+      | Strict, true, _ :: _ ->
+        Location.raise_errorf ~loc:mb_expr.mod_loc
+          "genType runtime safety: module alias '%s' cannot export runtime \
+           values because ReScript does not emit a runtime module object for \
+           aliases. Export the values from their owning module or define a \
+           real wrapper module."
+          name
+      | Strict, _, _ -> {translation with code_items = []}
+      | LegacyEager, _, _ -> translation
     | Mty_alias _ | Mty_ident _ | Mty_functor _ -> Translation.empty)
   | Tmod_structure structure ->
     let is_let_private =

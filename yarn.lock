@@ -741,6 +741,15 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@tests/gentype-crossdir-imports@workspace:tests/gentype_tests/crossdir-imports":
+  version: 0.0.0-use.local
+  resolution: "@tests/gentype-crossdir-imports@workspace:tests/gentype_tests/crossdir-imports"
+  dependencies:
+    rescript: "workspace:^"
+    typescript: "npm:5.9.3"
+  languageName: unknown
+  linkType: soft
+
 "@tests/gentype-react-example@workspace:tests/gentype_tests/typescript-react-example":
   version: 0.0.0-use.local
   resolution: "@tests/gentype-react-example@workspace:tests/gentype_tests/typescript-react-example"
@@ -751,6 +760,32 @@ __metadata:
     "@types/react-dom": "npm:^18.3.0"
     react: "npm:^18.3.1"
     react-dom: "npm:^18.3.1"
+    rescript: "workspace:^"
+    typescript: "npm:5.9.3"
+  languageName: unknown
+  linkType: soft
+
+"@tests/gentype-runtime-safety-callable-cycle@workspace:tests/gentype_tests/runtime-safety/callable-cycle":
+  version: 0.0.0-use.local
+  resolution: "@tests/gentype-runtime-safety-callable-cycle@workspace:tests/gentype_tests/runtime-safety/callable-cycle"
+  dependencies:
+    rescript: "workspace:^"
+    typescript: "npm:5.9.3"
+  languageName: unknown
+  linkType: soft
+
+"@tests/gentype-runtime-safety-module-alias-rejected@workspace:tests/gentype_tests/runtime-safety/module-alias-rejected":
+  version: 0.0.0-use.local
+  resolution: "@tests/gentype-runtime-safety-module-alias-rejected@workspace:tests/gentype_tests/runtime-safety/module-alias-rejected"
+  dependencies:
+    rescript: "workspace:^"
+  languageName: unknown
+  linkType: soft
+
+"@tests/gentype-runtime-safety-module-alias@workspace:tests/gentype_tests/runtime-safety/module-alias":
+  version: 0.0.0-use.local
+  resolution: "@tests/gentype-runtime-safety-module-alias@workspace:tests/gentype_tests/runtime-safety/module-alias"
+  dependencies:
     rescript: "workspace:^"
     typescript: "npm:5.9.3"
   languageName: unknown
