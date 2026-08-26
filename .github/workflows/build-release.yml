@@ -59,6 +59,7 @@ jobs:
       - name: Name release assets
         run: |
           mkdir -p release-binaries
+          printf '%s\n' "$GITHUB_SHA" > release-binaries/source-sha.txt
           for binary in packages/@rescript/linux-x64/bin/*.exe; do
             name="$(basename "$binary" .exe)"
             cp "$binary" "release-binaries/${name}-linux-x64.exe"

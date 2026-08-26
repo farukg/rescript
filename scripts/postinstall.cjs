@@ -5,6 +5,7 @@ const { execSync } = require("child_process");
 
 const REPO = "farukg/rescript";
 const RELEASE_TAG = "patched";
+const SOURCE_SHA_ASSET = "source-sha.txt";
 const BINARIES = [
   "bsb_helper",
   "bsc",
@@ -17,6 +18,22 @@ const BINARIES = [
 
 function isSourceCheckout() {
   return fs.existsSync(path.join(__dirname, "..", ".git"));
+}
+
+function expectedSourceSha() {
+  const resolved = process.env.npm_package_resolved || "";
+  const resolvedMatch = resolved.match(/#([0-9a-f]{7,40})$/i);
+  if (resolvedMatch) return resolvedMatch[1].toLowerCase();
+
+  const installPath = path.resolve(__dirname, "..");
+  for (const pattern of [
+    /farukg-rescript-([0-9a-f]{7,40})/i,
+    /farukg\+rescript\+([0-9a-f]{7,40})/i,
+  ]) {
+    const match = installPath.match(pattern);
+    if (match) return match[1].toLowerCase();
+  }
+  return null;
 }
 
 function getPlatformKey() {
@@ -80,6 +97,7 @@ async function downloadToolchain() {
 
   const binDir = getBinDir();
   const stagingDir = path.join(binDir, `.install-${process.pid}`);
+  const expectedSha = expectedSourceSha();
 
   console.log(
     `[rescript-patched] Downloading toolchain for ${platformKey}...`
@@ -88,6 +106,17 @@ async function downloadToolchain() {
   try {
     fs.mkdirSync(binDir, { recursive: true });
     fs.mkdirSync(stagingDir);
+    const sourceShaPath = path.join(stagingDir, SOURCE_SHA_ASSET);
+    await downloadFile(
+      `https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${SOURCE_SHA_ASSET}`,
+      sourceShaPath
+    );
+    const releasedSha = fs.readFileSync(sourceShaPath, "utf8").trim().toLowerCase();
+    if (!expectedSha || !releasedSha.startsWith(expectedSha)) {
+      throw new Error(
+        `Released toolchain ${releasedSha || "has no source SHA"} does not match installed source ${expectedSha || "with unknown SHA"}`
+      );
+    }
     for (const binary of BINARIES) {
       const filename = `${binary}.exe`;
       const url = `https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${binary}-${platformKey}.exe`;
