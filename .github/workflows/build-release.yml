@@ -1,91 +1,64 @@
-name: Build and Release Rewatch
+name: Build and Release Patched Linux Toolchain
 
 on:
+  push:
+    branches: [master]
   workflow_dispatch:
 
 jobs:
-  build-rewatch:
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            platform: linux-x64
-            target: x86_64-unknown-linux-gnu
-          - os: ubuntu-24.04-arm
-            platform: linux-arm64
-            target: aarch64-unknown-linux-gnu
-          - os: macos-15
-            platform: darwin-arm64
-            target: aarch64-apple-darwin
-          - os: macos-15-intel
-            platform: darwin-x64
-            target: x86_64-apple-darwin
-          - os: windows-2025
-            platform: win32-x64
-            target: x86_64-pc-windows-msvc
-
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Build rewatch
-        run: cargo build --manifest-path rewatch/Cargo.toml --release --target ${{ matrix.target }}
-
-      - name: Copy binary (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          mkdir -p packages/@rescript/${{ matrix.platform }}/bin
-          cp rewatch/target/${{ matrix.target }}/release/rescript packages/@rescript/${{ matrix.platform }}/bin/rescript.exe
-
-      - name: Copy binary (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          New-Item -ItemType Directory -Force -Path packages/@rescript/${{ matrix.platform }}/bin
-          Copy-Item rewatch/target/${{ matrix.target }}/release/rescript.exe packages/@rescript/${{ matrix.platform }}/bin/rescript.exe
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: rewatch-${{ matrix.platform }}
-          path: packages/@rescript/${{ matrix.platform }}/bin/rescript.exe
-
-  release:
-    needs: build-rewatch
-    runs-on: ubuntu-latest
+  linux-x64:
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/setup-node@v6
         with:
-          path: artifacts
-          pattern: rewatch-*
+          node-version-file: .nvmrc
+          cache: yarn
 
-      - name: Organize artifacts
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap darcs g++-multilib gcc-multilib mercurial musl-tools rsync cmake
+
+      - uses: ocaml/setup-ocaml@v3.4.8
+        with:
+          ocaml-compiler: ocaml-variants.5.3.0+options,ocaml-option-static
+          opam-pin: false
+
+      - name: Install project dependencies
+        run: |
+          yarn install
+          opam install . --deps-only --with-test
+
+      - name: Build compiler
+        run: opam exec -- dune build --profile static
+
+      - name: Copy compiler binaries
+        run: node scripts/copyExes.js --compiler
+
+      - name: Build ninja
+        run: |
+          LDFLAGS=-static node scripts/buildNinjaBinary.js
+          node scripts/copyExes.js --ninja
+
+      - name: Name release assets
         run: |
           mkdir -p release-binaries
-          for dir in artifacts/rewatch-*/; do
-            platform=$(basename "$dir" | sed 's/rewatch-//')
-            cp "$dir"rescript.exe "release-binaries/rescript-${platform}.exe"
+          for binary in packages/@rescript/linux-x64/bin/*.exe; do
+            name="$(basename "$binary" .exe)"
+            cp "$binary" "release-binaries/${name}-linux-x64.exe"
           done
-          ls -la release-binaries/
 
-      - name: Update release
+      - name: Update patched toolchain release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: patched
-          name: Patched Rewatch Binaries
-          body: |
-            Auto-built rewatch binaries with default all-errors support.
-            Updated on ${{ github.sha }}.
+          name: Patched ReScript Toolchains
+          body: Patched Linux toolchain built from ${{ github.sha }}.
           files: release-binaries/*
           draft: false
           prerelease: true
-          fail_on_unmatched_files: false
+          fail_on_unmatched_files: true
