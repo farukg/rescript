@@ -18,6 +18,11 @@ jobs:
           node-version-file: .nvmrc
           cache: yarn
 
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.91"
+          targets: x86_64-unknown-linux-musl
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -38,6 +43,13 @@ jobs:
 
       - name: Copy compiler binaries
         run: node scripts/copyExes.js --compiler
+
+      - name: Build rewatch
+        run: |
+          cargo build --manifest-path rewatch/Cargo.toml --release --target x86_64-unknown-linux-musl
+          mkdir -p rewatch/target/release
+          cp rewatch/target/x86_64-unknown-linux-musl/release/rescript rewatch/target/release/rescript
+          node scripts/copyExes.js --rewatch
 
       - name: Build ninja
         run: |
