@@ -33,7 +33,6 @@ jobs:
           ocaml-compiler: ocaml-variants.5.3.0+options,ocaml-option-static
           opam-pin: false
           dune-cache: true
-          cache-prefix: patched-linux-x64-v1
 
       - name: Install project dependencies
         run: |
