@@ -29,11 +29,30 @@ function expectedSourceSha() {
   for (const pattern of [
     /farukg-rescript-([0-9a-f]{7,40})/i,
     /farukg\+rescript\+([0-9a-f]{7,40})/i,
+    // pnpm normalisiert github/git+ssh auf codeload-Tarballs; der Store-Pfad
+    // trägt den SHA nach "tar.gz+" (evtl. gekürzt + pnpm-Hash-Suffix).
+    /farukg\+rescript\+tar\.gz\+([0-9a-f]{7,40})/i,
   ]) {
     const match = installPath.match(pattern);
     if (match) return match[1].toLowerCase();
   }
-  return null;
+
+  // file:/link-Installationen tragen keinen SHA im Pfad: ein daneben
+  // mitinstalliertes source-sha.txt (aus dem Fork-Checkout) ist die Quelle.
+  const packagedSha = path.join(
+    installPath,
+    "packages",
+    "@rescript",
+    "source-sha.txt"
+  );
+  try {
+    return fs
+      .readFileSync(packagedSha, "utf8")
+      .trim()
+      .toLowerCase();
+  } catch {
+    return null;
+  }
 }
 
 function getPlatformKey() {

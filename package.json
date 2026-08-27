@@ -69,6 +69,7 @@
     "docs/docson/build-schema.json",
     "cli",
     "scripts/postinstall.cjs",
+    "packages/@rescript/source-sha.txt",
     "packages/@rescript/linux-x64/bin/rescript.exe"
   ],
   "exports": {
