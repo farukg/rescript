@@ -81,7 +81,17 @@ pub fn read(build_state: &mut BuildCommandState) -> anyhow::Result<CompileAssets
                 "iast" | "ast" => {
                     let module_name = helpers::file_path_to_module_name(path, package_namespace);
 
-                    if let Some(res_file_path_buf) = get_res_path_from_ast(path) {
+                    // Installed cache copies can retain another package's absolute source path.
+                    let package = &build_state.packages[package_name];
+                    if let Some(res_file_path_buf) = get_res_path_from_ast(path)
+                        && res_file_path_buf
+                            .strip_prefix(&package.path)
+                            .is_ok_and(|relative| {
+                                !relative
+                                    .components()
+                                    .any(|component| matches!(component, std::path::Component::ParentDir))
+                            })
+                    {
                         let _ = ast_modules.insert(
                             res_file_path_buf.clone(),
                             AstModule {

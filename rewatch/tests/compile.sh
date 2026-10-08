@@ -34,6 +34,27 @@ else
   exit 1
 fi
 
+# Missing JavaScript must invalidate retained CMT/AST state for root and dependency modules.
+bold "Test: Incremental build recreates missing JavaScript without source changes"
+recovery_dir=$(mktemp -d)
+for module in packages/main/src/Main packages/dep01/src/Dep01; do
+  cp "$module.res" "$recovery_dir/source.res"
+  mv "$module.mjs" "$recovery_dir/output.mjs"
+  error_output=$(rewatch build 2>&1)
+  if [ $? -ne 0 ] || [ ! -f "$module.mjs" ]; then
+    error "Incremental build did not recreate $module.mjs (evidence: $recovery_dir)"
+    printf "%s\n" "$error_output" >&2
+    exit 1
+  fi
+  if ! cmp "$module.mjs" "$recovery_dir/output.mjs" || ! cmp "$module.res" "$recovery_dir/source.res"; then
+    error "Recovery changed source or generated behavior (evidence: $recovery_dir)"
+    exit 1
+  fi
+done
+rm "$recovery_dir/source.res" "$recovery_dir/output.mjs"
+rmdir "$recovery_dir"
+success "Missing root and dependency outputs regenerated"
+
 # Build from standalone package folder using `rescript build`
 bold "Test: Standalone package can build via rescript from package folder"
 pushd ./packages/standalone > /dev/null

@@ -505,6 +505,16 @@ pub fn format_namespaced_module_name(module_name: &str) -> String {
     }
 }
 
+pub fn copy_compiler_asset_if_changed(source: &Path, destination: &Path) -> io::Result<()> {
+    let contents = fs::read(source)?;
+    match fs::read(destination) {
+        Ok(previous) if previous == contents => Ok(()),
+        Ok(_) => fs::copy(source, destination).map(|_| ()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => fs::copy(source, destination).map(|_| ()),
+        Err(error) => Err(error),
+    }
+}
+
 pub fn compute_file_hash(path: &Path) -> Option<blake3::Hash> {
     match fs::read(path) {
         Ok(str) => Some(blake3::hash(&str)),
@@ -523,10 +533,7 @@ pub fn get_nearest_config(path_buf: &Path) -> Option<PathBuf> {
         if has_rescript_config(&current_dir) {
             return Some(current_dir);
         }
-        match current_dir.parent() {
-            None => return None,
-            Some(parent) => current_dir = parent.to_path_buf(),
-        }
+        current_dir = current_dir.parent()?.to_path_buf();
     }
 }
 
@@ -544,9 +551,68 @@ pub fn get_source_file_from_rescript_file(path: &Path, suffix: &str) -> PathBuf 
     )
 }
 
+pub fn get_js_output_path(
+    package_path: &Path,
+    source_path: &Path,
+    spec: &crate::config::PackageSpec,
+    suffix: &str,
+) -> PathBuf {
+    let source = if spec.in_source {
+        package_path.join(source_path)
+    } else {
+        package_path
+            .join("lib")
+            .join(spec.get_out_of_source_dir())
+            .join(source_path)
+    };
+    get_source_file_from_rescript_file(&source, suffix)
+}
+
 pub fn is_local_package(workspace_path: &Path, canonical_package_path: &Path) -> bool {
     canonical_package_path.starts_with(workspace_path)
         && !canonical_package_path
             .components()
             .any(|c| c.as_os_str() == "node_modules")
+}
+
+#[cfg(test)]
+mod js_output_tests {
+    use super::*;
+    use crate::config::PackageSpec;
+
+    #[test]
+    fn output_paths_follow_source_location_module_format_and_compound_suffix() {
+        let package = Path::new("workspace/linked");
+        let source = Path::new("src/nested/Adapter.res");
+        for (module, in_source, suffix, expected) in [
+            (
+                "esmodule",
+                true,
+                ".res.mjs",
+                "workspace/linked/src/nested/Adapter.res.mjs",
+            ),
+            (
+                "esmodule",
+                false,
+                ".mjs",
+                "workspace/linked/lib/es6/src/nested/Adapter.mjs",
+            ),
+            (
+                "commonjs",
+                false,
+                ".cjs",
+                "workspace/linked/lib/js/src/nested/Adapter.cjs",
+            ),
+        ] {
+            let spec = PackageSpec {
+                module: module.to_owned(),
+                in_source,
+                suffix: None,
+            };
+            assert_eq!(
+                get_js_output_path(package, source, &spec, suffix),
+                Path::new(expected)
+            );
+        }
+    }
 }

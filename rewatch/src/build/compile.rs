@@ -208,7 +208,14 @@ pub fn compile(
                                 "cmi",
                             );
 
-                            let cmi_digest = helpers::compute_file_hash(Path::new(&cmi_path));
+                            let cmj_path = helpers::get_compiler_asset(
+                                package,
+                                &package.namespace,
+                                &source_file.implementation.path,
+                                "cmj",
+                            );
+                            let cmi_digest = helpers::compute_file_hash(&cmi_path);
+                            let cmj_digest = helpers::compute_file_hash(&cmj_path);
 
                             let package = build_state
                                 .get_package(&module.package_name)
@@ -236,19 +243,20 @@ pub fn compile(
                                 build_state,
                                 build_state.get_warn_error_override(),
                             );
-                            let cmi_digest_after = helpers::compute_file_hash(Path::new(&cmi_path));
+                            let cmi_digest_after = helpers::compute_file_hash(&cmi_path);
+                            let cmj_digest_after = helpers::compute_file_hash(&cmj_path);
 
-                            // we want to compare both the hash of interface and the implementation
-                            // compile assets to verify that nothing changed. We also need to checke the interface
-                            // because we can include MyModule, so the modules that depend on this module might
-                            // change when this modules interface does not change, but the implementation does
-                            let is_clean_cmi = match (cmi_digest, cmi_digest_after) {
-                                (Some(cmi_digest), Some(cmi_digest_after)) => {
-                                    cmi_digest.eq(&cmi_digest_after)
-                                }
-
-                                _ => false,
-                            };
+                            // CMJ changes can alter inlined values or aliased representations without a CMI change.
+                            let is_clean_cmi =
+                                match (cmi_digest, cmi_digest_after, cmj_digest, cmj_digest_after) {
+                                    (
+                                        Some(before_cmi),
+                                        Some(after_cmi),
+                                        Some(before_cmj),
+                                        Some(after_cmj),
+                                    ) => before_cmi == after_cmi && before_cmj == after_cmj,
+                                    _ => false,
+                                };
 
                             Some((
                                 module_name.to_string(),
@@ -288,17 +296,36 @@ pub fn compile(
 
             let module_dependents = build_state.get_module(module_name).unwrap().dependents.clone();
 
-            // if not clean -- compile modules that depend on this module
-            for dep in module_dependents.iter() {
-                //  mark the reverse dep as dirty when the source is not clean
-                if !*is_clean {
-                    let dep_module = build_state.modules.get_mut(dep).unwrap();
-                    //  mark the reverse dep as dirty when the source is not clean
-                    dep_module.compile_dirty = true;
+            if !*is_clean {
+                let mut pending = module_dependents.iter().cloned().collect::<Vec<_>>();
+                let mut invalidated = AHashSet::new();
+                while let Some(name) = pending.pop() {
+                    if invalidated.insert(name.clone()) {
+                        let dependent = build_state
+                            .modules
+                            .get_mut(&name)
+                            .ok_or_else(|| anyhow!("Dependent module not found: {name}"))?;
+                        dependent.compile_dirty = true;
+                        pending.extend(dependent.dependents.iter().cloned());
+                    }
                 }
+            }
+            for dep in module_dependents.iter() {
                 if !compiled_modules.contains(dep) {
                     in_progress_modules.insert(dep.to_string());
                 }
+            }
+
+            // Clean source modules participate in dependency scheduling without a compiler invocation.
+            if !is_compiled
+                && matches!(
+                    build_state
+                        .get_module(module_name)
+                        .map(|module| &module.source_type),
+                    Some(SourceType::SourceFile(_))
+                )
+            {
+                continue;
             }
 
             let package_name = {
@@ -580,37 +607,25 @@ pub fn compiler_args(
     let package_name_arg = vec!["-bs-package-name".to_string(), config.name.to_owned()];
 
     let implementation_args = if is_interface {
-        debug!("Compiling interface file: {}", &module_name);
+        debug!("Compiling interface file: {}", module_name);
         vec![]
     } else {
-        debug!("Compiling file: {}", &module_name);
+        debug!("Compiling file: {}", module_name);
         let specs = root_config.get_package_specs();
 
-        specs
-            .iter()
-            .flat_map(|spec| {
-                vec![
-                    "-bs-package-output".to_string(),
-                    format!(
-                        "{}:{}:{}",
-                        spec.module,
-                        if spec.in_source {
-                            file_path.parent().unwrap().to_str().unwrap().to_string()
-                        } else {
-                            Path::new("lib")
-                                .join(Path::join(
-                                    Path::new(&spec.get_out_of_source_dir()),
-                                    file_path.parent().unwrap(),
-                                ))
-                                .to_str()
-                                .unwrap()
-                                .to_string()
-                        },
-                        root_config.get_suffix(spec),
-                    ),
-                ]
-            })
-            .collect()
+        let mut args = Vec::new();
+        for spec in &specs {
+            let suffix = root_config.get_suffix(spec);
+            let output = helpers::get_js_output_path(Path::new(""), file_path, spec, &suffix);
+            let directory = output
+                .parent()
+                .ok_or_else(|| anyhow!("JavaScript output has no parent: {}", output.display()))?;
+            args.extend([
+                "-bs-package-output".to_string(),
+                format!("{}:{}:{}", spec.module, directory.display(), suffix),
+            ]);
+        }
+        args
     };
 
     let runtime_path_args = get_runtime_path_args(config, project_context)?;
@@ -806,20 +821,14 @@ fn compile_file(
 
             // perhaps we can do this copying somewhere else
             if !is_interface {
-                let _ = std::fs::copy(
-                    package
-                        .get_build_path()
-                        .join(dir)
-                        // because editor tooling doesn't support namespace entries yet
-                        // we just remove the @ for now. This makes sure the editor support
-                        // doesn't break
-                        .join(format!("{basename}.cmi")),
-                    ocaml_build_path_abs.join(format!("{basename}.cmi")),
-                );
-                let _ = std::fs::copy(
-                    package.get_build_path().join(dir).join(format!("{basename}.cmj")),
-                    ocaml_build_path_abs.join(format!("{basename}.cmj")),
-                );
+                helpers::copy_compiler_asset_if_changed(
+                    &package.get_build_path().join(dir).join(format!("{basename}.cmi")),
+                    &ocaml_build_path_abs.join(format!("{basename}.cmi")),
+                )?;
+                helpers::copy_compiler_asset_if_changed(
+                    &package.get_build_path().join(dir).join(format!("{basename}.cmj")),
+                    &ocaml_build_path_abs.join(format!("{basename}.cmj")),
+                )?;
                 let _ = std::fs::copy(
                     package
                         .get_build_path()
@@ -838,10 +847,10 @@ fn compile_file(
                         .join(format!("{basename}.cmti")),
                     ocaml_build_path_abs.join(format!("{basename}.cmti")),
                 );
-                let _ = std::fs::copy(
-                    package.get_build_path().join(dir).join(format!("{basename}.cmi")),
-                    ocaml_build_path_abs.join(format!("{basename}.cmi")),
-                );
+                helpers::copy_compiler_asset_if_changed(
+                    &package.get_build_path().join(dir).join(format!("{basename}.cmi")),
+                    &ocaml_build_path_abs.join(format!("{basename}.cmi")),
+                )?;
             }
 
             if let SourceType::SourceFile(SourceFile {
@@ -923,23 +932,12 @@ fn compile_file(
             {
                 // Execute post-build command for each package spec (each output format)
                 for spec in root_config.get_package_specs() {
-                    // Determine the correct JS file path based on in-source setting:
-                    // - in-source: true  -> next to the source file (e.g., src/Foo.js)
-                    // - in-source: false -> in lib/<module>/ directory (e.g., lib/es6/src/Foo.js)
-                    let js_file = if spec.in_source {
-                        helpers::get_source_file_from_rescript_file(
-                            &Path::new(&package.path).join(path),
-                            &root_config.get_suffix(&spec),
-                        )
-                    } else {
-                        helpers::get_source_file_from_rescript_file(
-                            &Path::new(&package.path)
-                                .join("lib")
-                                .join(spec.get_out_of_source_dir())
-                                .join(path),
-                            &root_config.get_suffix(&spec),
-                        )
-                    };
+                    let js_file = helpers::get_js_output_path(
+                        &package.path,
+                        path,
+                        &spec,
+                        &root_config.get_suffix(&spec),
+                    );
 
                     if js_file.exists() {
                         // Fail the build if post-build command fails (matches bsb behavior with &&)
@@ -961,6 +959,59 @@ fn compile_file(
             }
         }
     }
+}
+
+pub fn mark_modules_with_missing_outputs_dirty(build_state: &mut BuildCommandState) -> Result<()> {
+    let outputs = build_state
+        .get_root_config()
+        .get_package_specs()
+        .into_iter()
+        .map(|spec| {
+            let suffix = build_state.get_root_config().get_suffix(&spec);
+            (spec, suffix)
+        })
+        .collect::<Vec<_>>();
+    let BuildState {
+        modules, packages, ..
+    } = &mut build_state.build_state;
+    for (name, module) in modules {
+        let package = packages
+            .get(&module.package_name)
+            .ok_or_else(|| anyhow!("Package not found: {}", module.package_name))?;
+        let (path, namespace, extensions) = match &module.source_type {
+            SourceType::MlMap(_) => (
+                Path::new(name),
+                &packages::Namespace::NoNamespace,
+                &["cmi", "cmj", "cmt"][..],
+            ),
+            SourceType::SourceFile(source) => {
+                module.compile_dirty |= outputs.iter().any(|(spec, suffix)| {
+                    !helpers::get_js_output_path(&package.path, &source.implementation.path, spec, suffix)
+                        .is_file()
+                });
+                let extensions = match &source.interface {
+                    Some(_) => &["cmi", "cmj", "cmt", "cmti"][..],
+                    None => &["cmi", "cmj", "cmt"][..],
+                };
+                (
+                    source.implementation.path.as_path(),
+                    &package.namespace,
+                    extensions,
+                )
+            }
+        };
+        module.compile_dirty |= extensions.iter().any(|extension| {
+            !helpers::get_compiler_asset(package, namespace, path, extension).is_file()
+                || !Path::new(&helpers::get_bs_compiler_asset(
+                    package,
+                    namespace,
+                    path,
+                    &format!(".{extension}"),
+                ))
+                .is_file()
+        });
+    }
+    Ok(())
 }
 
 pub fn mark_modules_with_deleted_deps_dirty(build_state: &mut BuildState) {
@@ -985,77 +1036,51 @@ pub fn mark_modules_with_deleted_deps_dirty(build_state: &mut BuildState) {
 //
 // We could clean up the build after errors. But I think we probably still need
 // to do this, because people can also force quit the watcher of
-pub fn mark_modules_with_expired_deps_dirty(build_state: &mut BuildCommandState) {
-    let mut modules_with_expired_deps: AHashSet<String> = AHashSet::new();
-    build_state
-        .modules
-        .iter()
-        .filter(|m| !m.1.is_mlmap())
-        .for_each(|(module_name, module)| {
-            for dependent in module.dependents.iter() {
-                let dependent_module = build_state.modules.get(dependent).unwrap();
-                match dependent_module.source_type {
-                    SourceType::SourceFile(_) => {
-                        match (module.last_compiled_cmt, module.last_compiled_cmt) {
-                            (None, None) | (Some(_), None) | (None, Some(_)) => {
-                                // println!(
-                                //     "🛑 {} is a dependent of {} but has no cmt/cmi",
-                                //     module_name, dependent
-                                // );
-                                modules_with_expired_deps.insert(module_name.to_string());
-                            }
-                            (Some(_), Some(_)) => (),
-                        }
-
-                        // we compare the last compiled time of the dependent module with the last
-                        // compile of the interface of the module it depends on, if the interface
-                        // didn't change it doesn't matter
-                        match (dependent_module.last_compiled_cmt, module.last_compiled_cmt) {
-                            (Some(last_compiled_dependent), Some(last_compiled)) => {
-                                if last_compiled_dependent < last_compiled {
-                                    // println!(
-                                    //     "✅ {} is a dependent of {} ({:?} / {:?})",
-                                    //     module_name, dependent, last_compiled_dependent, last_compiled
-                                    // );
-
-                                    modules_with_expired_deps.insert(dependent.to_string());
-                                } else {
-                                    // println!(
-                                    //     "🛑 {} is a dependent of {} ({:?} / {:?})",
-                                    //     module_name, dependent, last_compiled_dependent, last_compiled
-                                    // );
-                                }
-                            }
-                            (None, _) => {
-                                // println!(
-                                //     "🛑 {} is a dependent of {} (no last compiled time)",
-                                //     module_name, dependent
-                                // );
-                                modules_with_expired_deps.insert(dependent.to_string());
-                            }
-                            _ => (),
-                        }
+pub fn mark_modules_with_expired_deps_dirty(build_state: &mut BuildCommandState) -> Result<()> {
+    let mut expired = AHashSet::new();
+    for module in build_state.modules.values() {
+        let source = match &module.source_type {
+            SourceType::SourceFile(source) => source,
+            SourceType::MlMap(_) => continue,
+        };
+        let package = build_state
+            .get_package(&module.package_name)
+            .ok_or_else(|| anyhow!("Package not found: {}", module.package_name))?;
+        let changed = ["cmi", "cmj"]
+            .iter()
+            .filter_map(|extension| {
+                std::fs::metadata(helpers::get_compiler_asset(
+                    package,
+                    &package.namespace,
+                    &source.implementation.path,
+                    extension,
+                ))
+                .and_then(|metadata| metadata.modified())
+                .ok()
+            })
+            .max();
+        let mut pending = module.dependents.iter().collect::<Vec<_>>();
+        let mut visited = AHashSet::new();
+        while let Some(name) = pending.pop() {
+            if !visited.insert(name) {
+                continue;
+            }
+            let Some(dependent) = build_state.get_module(name) else {
+                continue;
+            };
+            match &dependent.source_type {
+                SourceType::MlMap(_) => pending.extend(dependent.dependents.iter()),
+                SourceType::SourceFile(_) => {
+                    if dependent.last_compiled_cmt.is_none() || changed > dependent.last_compiled_cmt {
+                        expired.insert(name.clone());
                     }
-                    // a namespace is never a dependent of a module (it can be a dependency, but not the other
-                    // way around)
-                    SourceType::MlMap(_) => {
-                        for dependent_of_namespace in dependent_module.dependents.iter() {
-                            let dependent_module = build_state.modules.get(dependent_of_namespace).unwrap();
-
-                            if let (Some(last_compiled_dependent), Some(last_compiled)) =
-                                (dependent_module.last_compiled_cmt, module.last_compiled_cmt)
-                                && last_compiled_dependent < last_compiled
-                            {
-                                modules_with_expired_deps.insert(dependent.to_string());
-                            }
-                        }
-                    }
+                    pending.extend(dependent.dependents.iter());
                 }
             }
-        });
-    build_state.modules.iter_mut().for_each(|(module_name, module)| {
-        if modules_with_expired_deps.contains(module_name) {
-            module.compile_dirty = true;
         }
-    });
+    }
+    for (name, module) in &mut build_state.modules {
+        module.compile_dirty |= expired.contains(name);
+    }
+    Ok(())
 }

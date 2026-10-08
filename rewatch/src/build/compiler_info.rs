@@ -1,6 +1,6 @@
 use crate::helpers;
 
-use super::build_types::{BuildCommandState, CompilerInfo};
+use super::build_types::{BuildCommandState, CompilerInfo, SourceType};
 use super::packages;
 use super::{clean, logs};
 use ahash::AHashMap;
@@ -20,6 +20,51 @@ struct CompilerInfoFile {
     rescript_config_hash: String,
     runtime_path: String,
     generated_at: String,
+}
+
+#[derive(Serialize, Deserialize, PartialEq)]
+enum BuildStateFormat {
+    TransitiveArtifactValidity,
+}
+
+#[derive(Deserialize)]
+struct BuildStateVersion {
+    build_state_format: BuildStateFormat,
+}
+
+pub fn invalidate_incompatible_build_state(build_state: &mut BuildCommandState) -> anyhow::Result<()> {
+    let mut incompatible = ahash::AHashSet::new();
+    for package in build_state.packages.values() {
+        let compatible = match std::fs::read(package.get_compiler_info_path()) {
+            Ok(bytes) => matches!(
+                serde_json::from_slice::<BuildStateVersion>(&bytes),
+                Ok(BuildStateVersion {
+                    build_state_format: BuildStateFormat::TransitiveArtifactValidity,
+                })
+            ),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+            Err(error) => return Err(error.into()),
+        };
+        if !compatible {
+            incompatible.insert(package.name.clone());
+        }
+    }
+    for module in build_state.modules.values_mut() {
+        if incompatible.contains(&module.package_name) {
+            module.compile_dirty = true;
+            module.deps_dirty = true;
+            match &mut module.source_type {
+                SourceType::SourceFile(source) => {
+                    source.implementation.parse_dirty = true;
+                    if let Some(interface) = &mut source.interface {
+                        interface.parse_dirty = true;
+                    }
+                }
+                SourceType::MlMap(mlmap) => mlmap.parse_dirty = true,
+            }
+        }
+    }
+    Ok(())
 }
 
 pub enum CompilerCheckResult {
@@ -128,6 +173,7 @@ pub fn write_compiler_info(build_state: &BuildCommandState) {
     // Borrowing serializer to avoid cloning the constant fields for every package
     #[derive(Serialize)]
     struct CompilerInfoFileRef<'a> {
+        build_state_format: BuildStateFormat,
         version: &'a str,
         bsc_path: &'a str,
         bsc_hash: &'a str,
@@ -139,6 +185,7 @@ pub fn write_compiler_info(build_state: &BuildCommandState) {
     build_state.packages.values().par_bridge().for_each(|package| {
         if let Some(rescript_config_hash) = helpers::compute_file_hash(&package.config.path) {
             let out = CompilerInfoFileRef {
+                build_state_format: BuildStateFormat::TransitiveArtifactValidity,
                 version: &version,
                 bsc_path: &bsc_path,
                 bsc_hash: &bsc_hash,

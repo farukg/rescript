@@ -159,6 +159,7 @@ pub fn initialize_build(
     let compile_assets_state = read_compile_state::read(&mut build_state)?;
 
     let (diff_cleanup, total_cleanup) = clean::cleanup_previous_build(&mut build_state, compile_assets_state);
+    compiler_info::invalidate_incompatible_build_state(&mut build_state)?;
     let timing_clean_total = timing_clean_start.elapsed();
 
     if show_progress {
@@ -283,6 +284,10 @@ pub fn incremental_build_without_lock(
     // keep scheduling every compilable module so all errors are collected.
     exit_after_first_error: bool,
 ) -> Result<(), IncrementalBuildError> {
+    compile::mark_modules_with_missing_outputs_dirty(build_state).map_err(|e| IncrementalBuildError {
+        kind: IncrementalBuildErrorKind::CompileError(Some(e.to_string())),
+        plain_output,
+    })?;
     logs::initialize(&build_state.packages);
     let num_dirty_modules = build_state.modules.values().filter(|m| is_dirty(m)).count() as u64;
     let pb = if !plain_output && show_progress {
@@ -325,7 +330,7 @@ pub fn incremental_build_without_lock(
                 pb.finish();
             }
 
-            eprintln!("{}", &err);
+            eprintln!("{}", err);
 
             return Err(IncrementalBuildError {
                 kind: IncrementalBuildErrorKind::SourceFileParseError,
@@ -352,10 +357,13 @@ pub fn incremental_build_without_lock(
         }
     }
     if helpers::contains_ascii_characters(&parse_warnings) {
-        eprintln!("{}", &parse_warnings);
+        eprintln!("{}", parse_warnings);
     }
 
-    mark_modules_with_expired_deps_dirty(build_state);
+    mark_modules_with_expired_deps_dirty(build_state).map_err(|e| IncrementalBuildError {
+        kind: IncrementalBuildErrorKind::CompileError(Some(e.to_string())),
+        plain_output,
+    })?;
     mark_modules_with_deleted_deps_dirty(&mut build_state.build_state);
     current_step += 1;
 
@@ -418,13 +426,13 @@ pub fn incremental_build_without_lock(
             }
         }
         if helpers::contains_ascii_characters(&compile_warnings) {
-            eprintln!("{}", &compile_warnings);
+            eprintln!("{}", compile_warnings);
         }
         if initial_build {
             log_config_warnings(build_state);
         }
         if helpers::contains_ascii_characters(&compile_errors) {
-            eprintln!("{}", &compile_errors);
+            eprintln!("{}", compile_errors);
         }
 
         Err(IncrementalBuildError {
@@ -448,7 +456,7 @@ pub fn incremental_build_without_lock(
         }
 
         if helpers::contains_ascii_characters(&compile_warnings) {
-            eprintln!("{}", &compile_warnings);
+            eprintln!("{}", compile_warnings);
         }
         if initial_build {
             log_config_warnings(build_state);
@@ -607,6 +615,7 @@ mod tests {
     use std::process;
     use std::sync::mpsc;
     use std::thread;
+    use std::time::SystemTime;
     use tempfile::TempDir;
 
     #[test]
@@ -684,5 +693,440 @@ mod tests {
                 .expect("build should finish after lock is removed")
         );
         build_thread.join().expect("build thread should complete");
+    }
+
+    fn build_output_fixture(root: &Path) -> BuildCommandState {
+        build(&None, root, false, false, false, true, None, false).expect("fixture must compile")
+    }
+
+    fn file_snapshot(path: &Path) -> (Vec<u8>, SystemTime) {
+        (
+            fs::read(path).expect("fixture file must exist"),
+            fs::metadata(path).unwrap().modified().unwrap(),
+        )
+    }
+
+    fn assert_output_fixture_noop(root: &Path, outputs: &[PathBuf], phase: &str) {
+        let snapshots = outputs.iter().map(|path| file_snapshot(path)).collect::<Vec<_>>();
+        let state = build_output_fixture(root);
+        for (path, snapshot) in outputs.iter().zip(snapshots) {
+            assert_eq!(
+                file_snapshot(path),
+                snapshot,
+                "{phase}: no-op rewrote {}",
+                path.display()
+            );
+        }
+        for (name, module) in &state.modules {
+            match &module.source_type {
+                SourceType::SourceFile(source) => {
+                    assert_eq!(
+                        source.implementation.compile_state,
+                        CompileState::Pending,
+                        "{name}"
+                    );
+                    assert!(!source.implementation.parse_dirty);
+                    assert!(!module.compile_dirty);
+                }
+                SourceType::MlMap(_) => assert!(!module.compile_dirty),
+            }
+        }
+    }
+
+    #[test]
+    fn provider_abi_change_rebuilds_unchanged_transitive_consumers() {
+        let fixture = TempDir::new().unwrap();
+        let root = fixture.path();
+        let dependency = root.join("node_modules/abi-provider");
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::create_dir_all(dependency.join("src")).unwrap();
+        fs::write(root.join("rescript.json"), r#"{"name":"abi-consumer","sources":["src"],"dependencies":["abi-provider"],"package-specs":{"module":"esmodule","in-source":true},"suffix":".mjs"}"#).unwrap();
+        fs::write(dependency.join("rescript.json"), r#"{"name":"abi-provider","namespace":"Provider","sources":["src"],"package-specs":{"module":"esmodule","in-source":true},"suffix":".mjs"}"#).unwrap();
+        fs::write(
+            dependency.join("package.json"),
+            r#"{"name":"abi-provider","type":"module"}"#,
+        )
+        .unwrap();
+        let provider = dependency.join("src/State.res");
+        fs::write(
+            &provider,
+            "type t = @as(0) Waiting(int) | @as(1) Ready(int)\nlet make = () => Ready(42)\nlet waiting = () => Waiting(99)\n",
+        )
+        .unwrap();
+        fs::write(root.join("src/Alias.res"), "module State = Provider.State\n").unwrap();
+        fs::write(root.join("src/Main.res"), "let read = value => switch value { | Alias.State.Waiting(_) => 0 | Alias.State.Ready(answer) => answer }\nlet answer = read(Alias.State.make())\n").unwrap();
+        let run = |phase: &str, expected_tags: &str| {
+            let output = process::Command::new("node")
+                .args(["--input-type=module", "--eval", "import {answer, read} from './src/Main.mjs'; import {make, waiting} from './node_modules/abi-provider/src/State.mjs'; const tags = JSON.stringify([waiting().TAG, make().TAG]); if (tags !== process.argv[1] || answer !== 42 || read(waiting()) !== 0) { console.error({tags, answer, waiting: read(waiting())}); process.exit(1); } console.log(answer)", expected_tags])
+                .current_dir(root)
+                .output()
+                .expect("Node must execute generated JavaScript");
+            assert!(
+                output.status.success(),
+                "{phase}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42", "{phase}");
+        };
+        build_output_fixture(root);
+        run("initial numeric ABI", "[0,1]");
+        let consumers =
+            ["src/Alias.res", "src/Main.res"].map(|path| (root.join(path), file_snapshot(&root.join(path))));
+        let outputs = [
+            "src/Alias.mjs",
+            "src/Main.mjs",
+            "node_modules/abi-provider/src/State.mjs",
+        ]
+        .map(|path| root.join(path));
+        for rebuild_provider_separately in [false, true] {
+            let before = fs::read(root.join("src/Main.mjs")).unwrap();
+            let provider_before = fs::read(dependency.join("src/State.mjs")).unwrap();
+            let source = match rebuild_provider_separately {
+                false => {
+                    "type t = @as(\"Waiting\") Waiting(int) | @as(\"Ready\") Ready(int)\nlet make = () => Ready(42)\nlet waiting = () => Waiting(99)\n"
+                }
+                true => {
+                    "type t = @as(0) Waiting(int) | @as(1) Ready(int)\nlet make = () => Ready(42)\nlet waiting = () => Waiting(99)\n"
+                }
+            };
+            let (phase, expected_tags) = match rebuild_provider_separately {
+                false => ("root numeric-to-string ABI", r#"["Waiting","Ready"]"#),
+                true => ("standalone string-to-numeric ABI", "[0,1]"),
+            };
+            fs::write(&provider, source).unwrap();
+            if rebuild_provider_separately {
+                build_output_fixture(&dependency);
+                assert_ne!(
+                    fs::read(dependency.join("src/State.mjs")).unwrap(),
+                    provider_before,
+                    "standalone provider must publish changed ABI"
+                );
+                let mut state = initialize_build(None, &None, false, root, true, None).unwrap();
+                let deleted = state.deleted_modules.clone();
+                deps::get_deps(&mut state, &deleted);
+                compile::mark_modules_with_expired_deps_dirty(&mut state).unwrap();
+                assert!(
+                    state.modules["Main"].compile_dirty,
+                    "provider publication must invalidate Main across Provider and Alias"
+                );
+            }
+            build_output_fixture(root);
+            run(phase, expected_tags);
+            assert_ne!(fs::read(root.join("src/Main.mjs")).unwrap(), before, "{phase}");
+            assert_ne!(
+                fs::read(dependency.join("src/State.mjs")).unwrap(),
+                provider_before,
+                "{phase}: provider ABI output"
+            );
+            for (path, snapshot) in &consumers {
+                assert_eq!(&file_snapshot(path), snapshot, "{phase}");
+            }
+            assert_output_fixture_noop(root, &outputs, phase);
+            run(phase, expected_tags);
+        }
+    }
+
+    #[test]
+    fn fresh_rows_state_or_pattern_preserves_runtime_tags() {
+        let fixture = TempDir::new().unwrap();
+        let root = fixture.path();
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("rescript.json"), r#"{"name":"rows-state-match","sources":["src"],"package-specs":{"module":"esmodule","in-source":true},"suffix":".mjs"}"#).unwrap();
+        fs::write(root.join("src/Hooks.res"), "type rowsState<'row> = Init | Running(array<'row>) | Ready(array<'row>) | Failed(array<'row>, string)\nlet init = Init\nlet running = Running([7])\nlet ready = Ready([7])\nlet failed = Failed([7], \"failure\")\n").unwrap();
+        fs::write(root.join("src/Consumer.res"), "let read = state => {\nlet (rows, settled) = switch state {\n| Hooks.Init => ([], false)\n| Running(rows) | Failed(rows, _) => (rows, false)\n| Ready(rows) => (rows, true)\n}\n(rows, settled)\n}\n").unwrap();
+        build_output_fixture(root);
+        let output = process::Command::new("node")
+            .args(["--input-type=module", "--eval", "import * as Hooks from './src/Hooks.mjs'; import {read} from './src/Consumer.mjs'; for (const [name, rows, settled] of [['init', [], false], ['running', [7], false], ['ready', [7], true], ['failed', [7], false]]) { const result = read(Hooks[name]); if (JSON.stringify(result) !== JSON.stringify([rows, settled])) { console.error({name, state: Hooks[name], result}); process.exit(1); } } console.log('four states passed')"])
+            .current_dir(root)
+            .output()
+            .expect("Node must execute fresh generated modules");
+        assert!(
+            output.status.success(),
+            "{}\nHooks:\n{}\nConsumer:\n{}",
+            String::from_utf8_lossy(&output.stderr),
+            fs::read_to_string(root.join("src/Hooks.mjs")).unwrap(),
+            fs::read_to_string(root.join("src/Consumer.mjs")).unwrap()
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            "four states passed"
+        );
+        let outputs = [root.join("src/Hooks.mjs"), root.join("src/Consumer.mjs")];
+        assert_output_fixture_noop(root, &outputs, "fresh rows-state or-pattern");
+    }
+
+    #[test]
+    fn legacy_build_state_reparses_without_deleting_outputs() {
+        #[derive(serde::Serialize, serde::Deserialize)]
+        struct LegacyCompilerInfo {
+            version: String,
+            bsc_path: String,
+            bsc_hash: String,
+            rescript_config_hash: String,
+            runtime_path: String,
+            generated_at: String,
+        }
+        let fixture = TempDir::new().unwrap();
+        let root = fixture.path();
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("rescript.json"), r#"{"name":"legacy-build-state","sources":["src"],"package-specs":{"module":"esmodule","in-source":true},"suffix":".mjs"}"#).unwrap();
+        let source = root.join("src/Main.res");
+        fs::write(&source, "let answer = 42\n").unwrap();
+        build_output_fixture(root);
+        let outputs = [
+            root.join("src/Main.mjs"),
+            root.join("lib/ocaml/Main.ast"),
+            root.join("lib/ocaml/Main.cmt"),
+        ];
+        let snapshots = outputs.iter().map(|path| file_snapshot(path)).collect::<Vec<_>>();
+        let source_snapshot = file_snapshot(&source);
+        let metadata = root.join("lib/bs/compiler-info.json");
+        let legacy: LegacyCompilerInfo = serde_json::from_slice(&fs::read(&metadata).unwrap()).unwrap();
+        fs::write(&metadata, serde_json::to_vec(&legacy).unwrap()).unwrap();
+        let state = initialize_build(None, &None, false, root, true, None).unwrap();
+        let SourceType::SourceFile(main) = &state.modules["Main"].source_type else {
+            panic!("Main is a source module");
+        };
+        assert!(main.implementation.parse_dirty);
+        assert!(state.modules["Main"].compile_dirty);
+        for (path, snapshot) in outputs.iter().zip(snapshots) {
+            assert_eq!(
+                file_snapshot(path),
+                snapshot,
+                "initialization must preserve {}",
+                path.display()
+            );
+        }
+        let rebuilt = build_output_fixture(root);
+        let SourceType::SourceFile(main) = &rebuilt.modules["Main"].source_type else {
+            panic!("Main is a source module");
+        };
+        assert_eq!(main.implementation.compile_state, CompileState::Success);
+        assert_eq!(file_snapshot(&source), source_snapshot);
+        assert_output_fixture_noop(root, &outputs, "upgraded build-state format");
+    }
+
+    #[test]
+    fn empty_function_output_has_no_trailing_whitespace() {
+        let fixture = TempDir::new().unwrap();
+        let root = fixture.path();
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("rescript.json"), r#"{"name":"empty-function-output","sources":["src"],"package-specs":{"module":"esmodule","in-source":true},"suffix":".mjs"}"#).unwrap();
+        fs::write(root.join("src/Labels.res"), "type status = First | Second\nlet label = value => switch value { | First => None | Second => None }\nlet empty = () => ()\nlet nested = () => { let callback = () => (); callback }\nlet nonempty = value => value + 1\n").unwrap();
+        build_output_fixture(root);
+        let generated = root.join("src/Labels.mjs");
+        let contents = fs::read_to_string(&generated).unwrap();
+        for (line, text) in contents.lines().enumerate() {
+            assert_eq!(text, text.trim_end(), "trailing whitespace at line {}", line + 1);
+        }
+        let output = process::Command::new("node")
+            .args(["--input-type=module", "--eval", "import {label, empty, nested, nonempty} from './src/Labels.mjs'; if (label('First') !== undefined || label('Second') !== undefined || empty() !== undefined || nested()() !== undefined || nonempty(41) !== 42) process.exit(1)"])
+            .current_dir(root)
+            .output()
+            .expect("Node must execute generated functions");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_output_fixture_noop(root, &[generated], "empty-function formatting");
+    }
+
+    #[test]
+    fn identity_adapter_result_preserves_constructor_tags() {
+        let fixture = TempDir::new().unwrap();
+        let root = fixture.path();
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("rescript.json"), r#"{"name":"adapter-result-match","sources":["src"],"package-specs":{"module":"esmodule","in-source":true},"suffix":".mjs"}"#).unwrap();
+        fs::write(
+            root.join("src/Adapter.res"),
+            "type value<'a> = 'a\nlet constant = value => value\n",
+        )
+        .unwrap();
+        fs::write(root.join("src/Hooks.res"), "module Rx = Adapter\ntype rowsState<'row> = Init | Running(array<'row>) | Ready(array<'row>) | Failed(array<'row>, string)\ntype handle<'row> = {state: Rx.value<rowsState<'row>>}\nlet useRowsState = (): Rx.value<rowsState<int>> => Rx.constant(Ready([7]))\n").unwrap();
+        fs::write(root.join("src/Consumer.res"), "let read = () => {\nlet state = Hooks.useRowsState()\nlet (rows, settled) = switch state {\n| Hooks.Init => ([], false)\n| Running(rows) | Failed(rows, _) => (rows, false)\n| Ready(rows) => (rows, true)\n}\n(rows, settled)\n}\n").unwrap();
+        build_output_fixture(root);
+        let output = process::Command::new("node")
+            .args(["--input-type=module", "--eval", "import {read} from './src/Consumer.mjs'; const actual = read(); if (JSON.stringify(actual) !== '[[7],true]') { console.error(actual); process.exit(1); } console.log('adapter tags passed')"])
+            .current_dir(root)
+            .output()
+            .expect("Node must execute generated adapter result");
+        assert!(
+            output.status.success(),
+            "{}\nConsumer:\n{}",
+            String::from_utf8_lossy(&output.stderr),
+            fs::read_to_string(root.join("src/Consumer.mjs")).unwrap()
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            "adapter tags passed"
+        );
+    }
+
+    #[test]
+    fn installed_cache_copy_preserves_original_package_outputs() {
+        let fixture = TempDir::new().unwrap();
+        let owner = fixture.path().join("owner");
+        let app = fixture.path().join("nested/fixture");
+        let installed = app.join("node_modules/copied-adapter");
+        fs::create_dir_all(owner.join("src")).unwrap();
+        fs::create_dir_all(app.join("src")).unwrap();
+        fs::write(owner.join("rescript.json"), r#"{"name":"copied-adapter","sources":["src"],"package-specs":{"module":"esmodule","in-source":true},"suffix":".res.mjs"}"#).unwrap();
+        fs::write(owner.join("src/Adapter.res"), "let answer = 42\n").unwrap();
+        fs::write(owner.join("src/Adapter.resi"), "let answer: int\n").unwrap();
+        build_output_fixture(&owner);
+        let mut originals = Vec::new();
+        let mut directories = vec![owner.clone()];
+        while let Some(directory) = directories.pop() {
+            for entry in fs::read_dir(directory).unwrap() {
+                let entry = entry.unwrap();
+                let path = entry.path();
+                let file_type = entry.file_type().unwrap();
+                if file_type.is_dir() {
+                    directories.push(path);
+                } else {
+                    assert!(
+                        file_type.is_file(),
+                        "fixture must contain only directories and files"
+                    );
+                    let snapshot = file_snapshot(&path);
+                    originals.push((path, snapshot));
+                }
+            }
+        }
+        for (path, _) in &originals {
+            let target = installed.join(path.strip_prefix(&owner).unwrap());
+            fs::create_dir_all(target.parent().unwrap()).unwrap();
+            fs::copy(path, target).unwrap();
+        }
+        fs::write(app.join("rescript.json"), r#"{"name":"copied-adapter-consumer","sources":["src"],"dependencies":["copied-adapter"],"package-specs":{"module":"esmodule","in-source":true},"suffix":".res.mjs"}"#).unwrap();
+        fs::write(app.join("src/Main.res"), "let answer = Adapter.answer\n").unwrap();
+        build_output_fixture(&app);
+        for (path, snapshot) in &originals {
+            assert_eq!(
+                &file_snapshot(path),
+                snapshot,
+                "installed build changed original {}",
+                path.display()
+            );
+        }
+        let outputs = [
+            app.join("src/Main.res.mjs"),
+            installed.join("src/Adapter.res.mjs"),
+            installed.join("lib/ocaml/Adapter.ast"),
+            installed.join("lib/ocaml/Adapter.iast"),
+        ];
+        assert_output_fixture_noop(&app, &outputs, "installed package cache relocation");
+        for (path, snapshot) in &originals {
+            assert_eq!(
+                &file_snapshot(path),
+                snapshot,
+                "installed no-op changed original {}",
+                path.display()
+            );
+        }
+    }
+
+    #[test]
+    fn missing_outputs_rebuild_without_source_changes() {
+        for (specs, suffix, js_paths) in [
+            (
+                r#"{"module":"esmodule","in-source":true}"#,
+                ".res.mjs",
+                vec![
+                    "src/nested/Main.res.mjs",
+                    "node_modules/output-dep/src/nested/Value.res.mjs",
+                ],
+            ),
+            (
+                r#"{"module":"commonjs","in-source":false,"suffix":".cjs"}"#,
+                ".ignored.js",
+                vec![
+                    "lib/js/src/nested/Main.cjs",
+                    "node_modules/output-dep/lib/js/src/nested/Value.cjs",
+                ],
+            ),
+            (
+                r#"[{"module":"esmodule","in-source":false,"suffix":".mjs"},{"module":"commonjs","in-source":false,"suffix":".js"}]"#,
+                ".ignored.js",
+                vec![
+                    "lib/es6/src/nested/Main.mjs",
+                    "node_modules/output-dep/lib/es6/src/nested/Value.mjs",
+                    "lib/js/src/nested/Main.js",
+                    "node_modules/output-dep/lib/js/src/nested/Value.js",
+                ],
+            ),
+        ] {
+            let fixture = TempDir::new().unwrap();
+            let root = fixture.path();
+            let dependency = root.join("node_modules/output-dep");
+            fs::create_dir_all(root.join("src/nested")).unwrap();
+            fs::create_dir_all(dependency.join("src/nested")).unwrap();
+            fs::write(
+                root.join("rescript.json"),
+                format!(
+                    r#"{{"name":"output-root","sources":[{{"dir":"src","subdirs":true}}],"dependencies":["output-dep"],"package-specs":{specs},"suffix":"{suffix}"}}"#
+                ),
+            )
+            .unwrap();
+            fs::write(
+                dependency.join("rescript.json"),
+                r#"{"name":"output-dep","namespace":"OutputDep","sources":[{"dir":"src","subdirs":true}],"package-specs":{"module":"commonjs","in-source":true},"suffix":".dependency.js"}"#,
+            )
+            .unwrap();
+            fs::write(
+                root.join("src/nested/Main.res"),
+                "let answer = OutputDep.Value.answer\n",
+            )
+            .unwrap();
+            fs::write(dependency.join("src/nested/Value.res"), "let answer = 42\n").unwrap();
+            fs::write(dependency.join("src/nested/Value.resi"), "let answer: int\n").unwrap();
+
+            build_output_fixture(root);
+            let inputs = [
+                "src/nested/Main.res",
+                "node_modules/output-dep/src/nested/Value.res",
+                "node_modules/output-dep/src/nested/Value.resi",
+                "lib/ocaml/Main.ast",
+                "node_modules/output-dep/lib/ocaml/Value.ast",
+                "node_modules/output-dep/lib/ocaml/Value.iast",
+            ]
+            .map(|path| (root.join(path), file_snapshot(&root.join(path))));
+
+            let mut outputs = js_paths.iter().map(|path| root.join(path)).collect::<Vec<_>>();
+            for extension in ["cmi", "cmj", "cmt"] {
+                outputs.extend([
+                    root.join(format!("lib/ocaml/Main.{extension}")),
+                    root.join(format!("lib/bs/src/nested/Main.{extension}")),
+                    dependency.join(format!("lib/ocaml/Value-OutputDep.{extension}")),
+                    dependency.join(format!("lib/bs/src/nested/Value-OutputDep.{extension}")),
+                    dependency.join(format!("lib/ocaml/OutputDep.{extension}")),
+                    dependency.join(format!("lib/bs/OutputDep.{extension}")),
+                ]);
+            }
+            outputs.extend([
+                dependency.join("lib/ocaml/Value-OutputDep.cmti"),
+                dependency.join("lib/bs/src/nested/Value-OutputDep.cmti"),
+            ]);
+            assert_output_fixture_noop(root, &outputs, "initial build");
+            let javascript = js_paths
+                .iter()
+                .map(|path| (root.join(path), fs::read(root.join(path)).unwrap()))
+                .collect::<Vec<_>>();
+
+            for output in &outputs {
+                assert!(output.is_file(), "compiler did not produce {}", output.display());
+                fs::remove_file(output).unwrap();
+                build_output_fixture(root);
+                assert!(output.is_file(), "build did not restore {}", output.display());
+                for (input, snapshot) in &inputs {
+                    assert_eq!(&file_snapshot(input), snapshot, "{} changed", input.display());
+                }
+                for (path, bytes) in &javascript {
+                    assert_eq!(&fs::read(path).unwrap(), bytes);
+                }
+                assert_output_fixture_noop(root, &outputs, &format!("restored {}", output.display()));
+            }
+        }
     }
 }

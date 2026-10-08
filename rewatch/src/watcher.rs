@@ -107,7 +107,7 @@ fn compute_watch_paths(build_state: &BuildCommandState, root: &Path) -> Vec<(Pat
             .or_insert(mode);
     };
 
-    for (_, package) in build_state.build_state.packages.iter() {
+    for package in build_state.build_state.packages.values() {
         if !package.is_local_dep {
             continue;
         }

@@ -36,18 +36,12 @@ fn escape_colours(str: &str) -> String {
 
 fn write_to_log_file(mut file: File, package_name: &str, content: &str) {
     let res = file.write(escape_colours(content).as_bytes()).map_err(|e| {
-        error!(
-            "Could not create compiler log file. {}. \n{:?}",
-            &package_name, &e
-        );
+        error!("Could not create compiler log file. {}. \n{:?}", package_name, e);
     });
 
     match res {
         Ok(_) => {}
-        Err(e) => error!(
-            "Could not create compiler log file. {}. \n{:?}",
-            &package_name, &e
-        ),
+        Err(e) => error!("Could not create compiler log file. {}. \n{:?}", package_name, e),
     }
 }
 
