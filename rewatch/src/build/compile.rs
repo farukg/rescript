@@ -616,7 +616,8 @@ pub fn compiler_args(
         let mut args = Vec::new();
         for spec in &specs {
             let suffix = root_config.get_suffix(spec);
-            let output = helpers::get_js_output_path(Path::new(""), file_path, spec, &suffix);
+            let output =
+                helpers::get_js_output_path(Path::new(""), file_path, &config.get_namespace(), spec, &suffix);
             let directory = output
                 .parent()
                 .ok_or_else(|| anyhow!("JavaScript output has no parent: {}", output.display()))?;
@@ -935,6 +936,7 @@ fn compile_file(
                     let js_file = helpers::get_js_output_path(
                         &package.path,
                         path,
+                        &package.namespace,
                         &spec,
                         &root_config.get_suffix(&spec),
                     );
@@ -986,8 +988,14 @@ pub fn mark_modules_with_missing_outputs_dirty(build_state: &mut BuildCommandSta
             ),
             SourceType::SourceFile(source) => {
                 module.compile_dirty |= outputs.iter().any(|(spec, suffix)| {
-                    !helpers::get_js_output_path(&package.path, &source.implementation.path, spec, suffix)
-                        .is_file()
+                    !helpers::get_js_output_path(
+                        &package.path,
+                        &source.implementation.path,
+                        &package.namespace,
+                        spec,
+                        suffix,
+                    )
+                    .is_file()
                 });
                 let extensions = match &source.interface {
                     Some(_) => &["cmi", "cmj", "cmt", "cmti"][..],

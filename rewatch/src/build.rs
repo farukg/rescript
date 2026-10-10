@@ -158,7 +158,8 @@ pub fn initialize_build(
 
     let compile_assets_state = read_compile_state::read(&mut build_state)?;
 
-    let (diff_cleanup, total_cleanup) = clean::cleanup_previous_build(&mut build_state, compile_assets_state);
+    let (diff_cleanup, total_cleanup) =
+        clean::cleanup_previous_build(&mut build_state, compile_assets_state)?;
     compiler_info::invalidate_incompatible_build_state(&mut build_state)?;
     let timing_clean_total = timing_clean_start.elapsed();
 
@@ -1025,6 +1026,92 @@ mod tests {
                 path.display()
             );
         }
+    }
+
+    #[test]
+    fn obsolete_hyphen_outputs_retire_without_deleting_live_owners() {
+        for (namespace, specs, old_outputs) in [
+            (
+                "false",
+                r#"{"module":"esmodule","in-source":true}"#,
+                vec!["src/default.res.mjs"],
+            ),
+            (
+                "false",
+                r#"[{"module":"esmodule","in-source":false,"suffix":".mjs"},{"module":"commonjs","in-source":false,"suffix":".cjs"}]"#,
+                vec!["lib/es6/src/default.mjs", "lib/js/src/default.cjs"],
+            ),
+            (
+                r#""OutputScope""#,
+                r#"{"module":"esmodule","in-source":true}"#,
+                vec!["src/default-Facet.res.mjs"],
+            ),
+        ] {
+            let fixture = TempDir::new().unwrap();
+            let root = fixture.path();
+            fs::create_dir_all(root.join("src")).unwrap();
+            fs::write(root.join("rescript.json"), format!(r#"{{"name":"output-retirement","namespace":{namespace},"sources":["src"],"package-specs":{specs},"suffix":".res.mjs"}}"#)).unwrap();
+            let old = root.join("src/default-Facet.res");
+            fs::write(&old, "let answer = 42\n").unwrap();
+            build_output_fixture(root);
+            let outputs = old_outputs.iter().map(|path| root.join(path)).collect::<Vec<_>>();
+            assert_output_fixture_noop(root, &outputs, "hyphen output follows actual BSC prefix");
+            fs::rename(&old, root.join("src/Config_Default_Facet.res")).unwrap();
+            build_output_fixture(root);
+            for output in &outputs {
+                assert!(!output.exists(), "obsolete JS remains: {}", output.display());
+            }
+            let basename = match namespace {
+                "false" => "default-Facet",
+                _ => "default-Facet-OutputScope",
+            };
+            for extension in ["cmi", "cmj", "cmt"] {
+                for directory in ["lib/ocaml", "lib/bs/src"] {
+                    assert!(
+                        !root
+                            .join(directory)
+                            .join(format!("{basename}.{extension}"))
+                            .exists(),
+                        "obsolete {extension} remains in {directory}"
+                    );
+                }
+            }
+            for directory in ["lib/ocaml", "lib/bs/src"] {
+                assert!(!root.join(directory).join("default-Facet.ast").exists());
+            }
+            let replacements = outputs
+                .iter()
+                .map(|path| {
+                    path.with_file_name(match path.extension().unwrap().to_str().unwrap() {
+                        "cjs" => "Config_Default_Facet.cjs",
+                        "mjs" if specs.contains("in-source\":true") => "Config_Default_Facet.res.mjs",
+                        "mjs" => "Config_Default_Facet.mjs",
+                        extension => panic!("Unexpected test extension {extension}"),
+                    })
+                })
+                .collect::<Vec<_>>();
+            assert_output_fixture_noop(root, &replacements, "renamed output retirement");
+        }
+
+        let fixture = TempDir::new().unwrap();
+        let root = fixture.path();
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("rescript.json"), r#"{"name":"live-output-owner","sources":["src"],"package-specs":{"module":"esmodule","in-source":true},"suffix":".res.mjs"}"#).unwrap();
+        fs::write(root.join("src/default-Facet.res"), "let answer = 42\n").unwrap();
+        build_output_fixture(root);
+        fs::write(root.join("src/default.res"), "let answer = 7\n").unwrap();
+        build_output_fixture(root);
+        let output = root.join("src/default.res.mjs");
+        let snapshot = file_snapshot(&output);
+        fs::rename(root.join("src/default-Facet.res"), root.join("retired-Facet.res")).unwrap();
+        initialize_build(None, &None, false, root, true, None).unwrap();
+        assert_eq!(
+            file_snapshot(&output),
+            snapshot,
+            "cleanup deleted a current source's output"
+        );
+        build_output_fixture(root);
+        assert_output_fixture_noop(root, &[output], "surviving output owner");
     }
 
     #[test]

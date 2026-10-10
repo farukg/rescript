@@ -32,125 +32,103 @@ fn remove_iast(package: &packages::Package, source_file: &Path) {
     ));
 }
 
-fn remove_mjs_file(source_file: &Path, suffix: &str) {
-    let _ = std::fs::remove_file(source_file.with_extension(
-        // suffix.to_string includes the ., so we need to remove it
-        &suffix[1..],
-    ));
-}
-
-fn remove_compile_asset(package: &packages::Package, source_file: &Path, extension: &str) {
-    let _ = std::fs::remove_file(helpers::get_compiler_asset(
-        package,
-        &package.namespace,
-        source_file,
-        extension,
-    ));
-    let _ = std::fs::remove_file(helpers::get_bs_compiler_asset(
-        package,
-        &package.namespace,
-        source_file,
-        extension,
-    ));
-}
-
-pub fn remove_compile_assets(package: &packages::Package, source_file: &Path) {
-    // optimization
-    // only issue cmti if there is an interfacce file
-    for extension in &["cmj", "cmi", "cmt", "cmti"] {
-        remove_compile_asset(package, source_file, extension);
+fn remove_output(path: &Path) -> Result<()> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
     }
 }
 
-fn clean_source_files(build_state: &BuildState, root_config: &Config) {
-    // get all rescript file locations
-    let rescript_file_locations = build_state
-        .modules
-        .values()
-        .filter_map(|module| match &module.source_type {
-            SourceType::SourceFile(source_file) => {
-                build_state.packages.get(&module.package_name).map(|package| {
-                    root_config
-                        .get_package_specs()
-                        .into_iter()
-                        .filter_map(|spec| {
-                            if spec.in_source {
-                                Some((
-                                    package.path.join(&source_file.implementation.path),
-                                    match spec.suffix {
-                                        None => root_config.get_suffix(&spec),
-                                        Some(suffix) => suffix,
-                                    },
-                                ))
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<(PathBuf, String)>>()
-                })
-            }
-            _ => None,
-        })
-        .flatten()
-        .collect::<Vec<(PathBuf, String)>>();
-
-    rescript_file_locations
-        .par_iter()
-        .for_each(|(rescript_file_location, suffix)| remove_mjs_file(rescript_file_location, suffix));
+fn source_outputs(build_state: &BuildState, root_config: &Config) -> Result<AHashSet<PathBuf>> {
+    let mut outputs = AHashSet::new();
+    for module in build_state.modules.values() {
+        let source = match &module.source_type {
+            SourceType::SourceFile(source) => &source.implementation.path,
+            SourceType::MlMap(_) => continue,
+        };
+        let package = build_state
+            .packages
+            .get(&module.package_name)
+            .ok_or_else(|| anyhow::anyhow!("Package not found: {}", module.package_name))?;
+        for spec in root_config.get_package_specs() {
+            outputs.insert(helpers::get_js_output_path(
+                &package.path,
+                source,
+                &package.namespace,
+                &spec,
+                &root_config.get_suffix(&spec),
+            ));
+        }
+    }
+    Ok(outputs)
 }
 
-// TODO: change to scan_previous_build => CompileAssetsState
-// and then do cleanup on that state (for instance remove all .mjs files that are not in the state)
+fn clean_source_files(build_state: &BuildState, root_config: &Config) -> Result<()> {
+    for output in source_outputs(build_state, root_config)? {
+        remove_output(&output)?;
+    }
+    Ok(())
+}
 
 pub fn cleanup_previous_build(
     build_state: &mut BuildCommandState,
     compile_assets_state: CompileAssetsState,
-) -> (usize, usize) {
-    // delete the .mjs file which appear in our previous compile assets
-    // but does not exists anymore
-    // delete the compiler assets for which modules we can't find a rescript file
-    // location of rescript file is in the AST
-    // delete the .mjs file for which we DO have a compiler asset, but don't have a
-    // rescript file anymore (path is found in the .ast file)
+) -> Result<(usize, usize)> {
+    let root_config = build_state.get_root_config();
+    let live_outputs = source_outputs(&build_state.build_state, root_config)?;
     let diff = compile_assets_state
         .ast_rescript_file_locations
         .difference(&compile_assets_state.rescript_file_locations)
         .collect::<Vec<&PathBuf>>();
-
     let diff_len = diff.len();
-
-    let deleted_interfaces = diff
-        .par_iter()
-        .map(|res_file_location| {
-            let AstModule {
-                module_name,
-                package_name,
-                ast_file_path,
-                suffix,
-                ..
-            } = compile_assets_state
-                .ast_modules
-                .get(*res_file_location)
-                .expect("Could not find module name for ast file");
-
-            let package = build_state
-                .packages
-                .get(package_name)
-                .expect("Could not find package");
-            remove_compile_assets(package, res_file_location);
-            remove_mjs_file(res_file_location, suffix);
-            remove_iast(package, res_file_location);
-            remove_ast(package, res_file_location);
-            match helpers::get_extension(ast_file_path).as_str() {
-                "iast" => Some(module_name.to_owned()),
-                "ast" => None,
-                _ => None,
+    let mut deleted_interfaces = AHashSet::new();
+    for res_file_location in diff {
+        let ast = compile_assets_state
+            .ast_modules
+            .get(res_file_location)
+            .ok_or_else(|| anyhow::anyhow!("Missing previous AST for {}", res_file_location.display()))?;
+        let package = build_state
+            .packages
+            .get(&ast.package_name)
+            .ok_or_else(|| anyhow::anyhow!("Package not found: {}", ast.package_name))?;
+        let source = res_file_location.strip_prefix(&package.path)?;
+        if source
+            .components()
+            .any(|component| matches!(component, std::path::Component::ParentDir))
+        {
+            anyhow::bail!("Previous source escapes package: {}", res_file_location.display());
+        }
+        for spec in root_config.get_package_specs() {
+            let output = helpers::get_js_output_path(
+                &package.path,
+                source,
+                &package.namespace,
+                &spec,
+                &root_config.get_suffix(&spec),
+            );
+            if !live_outputs.contains(&output) {
+                remove_output(&output)?;
             }
-        })
-        .collect::<Vec<Option<String>>>()
-        .iter()
-        .filter_map(|module_name| module_name.to_owned())
-        .collect::<AHashSet<String>>();
+        }
+        for extension in ["cmi", "cmj", "cmt", "cmti", "ast", "iast"] {
+            remove_output(&helpers::get_compiler_asset(
+                package,
+                &package.namespace,
+                source,
+                extension,
+            ))?;
+            remove_output(Path::new(&helpers::get_bs_compiler_asset(
+                package,
+                &package.namespace,
+                source,
+                extension,
+            )))?;
+        }
+        if helpers::is_interface_ast_file(&ast.ast_file_path) {
+            deleted_interfaces.insert(ast.module_name.clone());
+        }
+    }
 
     compile_assets_state
         .ast_rescript_file_locations
@@ -259,7 +237,7 @@ pub fn cleanup_previous_build(
 
     build_state.deleted_modules = deleted_module_names;
 
-    (diff_len, compile_assets_state.ast_rescript_file_locations.len())
+    Ok((diff_len, compile_assets_state.ast_rescript_file_locations.len()))
 }
 
 fn has_parse_warnings(module: &Module) -> bool {
@@ -397,7 +375,7 @@ pub fn clean(path: &Path, show_progress: bool, plain_output: bool) -> Result<()>
         let _ = std::io::stdout().flush();
     }
 
-    clean_source_files(&build_state, root_config);
+    clean_source_files(&build_state, root_config)?;
     let timing_clean_mjs_elapsed = timing_clean_mjs.elapsed();
 
     if !plain_output && show_progress {

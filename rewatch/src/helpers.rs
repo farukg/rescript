@@ -424,6 +424,7 @@ pub fn get_bs_compiler_asset(
     source_file: &Path,
     extension: &str,
 ) -> String {
+    let extension = extension.trim_start_matches('.');
     let namespace = match extension {
         "ast" | "iast" => &packages::Namespace::NoNamespace,
         _ => namespace,
@@ -435,7 +436,7 @@ pub fn get_bs_compiler_asset(
     package
         .get_build_path()
         .join(dir)
-        .join(format!("{basename}{extension}"))
+        .join(format!("{basename}.{extension}"))
         .to_str()
         .unwrap()
         .to_owned()
@@ -554,6 +555,7 @@ pub fn get_source_file_from_rescript_file(path: &Path, suffix: &str) -> PathBuf 
 pub fn get_js_output_path(
     package_path: &Path,
     source_path: &Path,
+    namespace: &packages::Namespace,
     spec: &crate::config::PackageSpec,
     suffix: &str,
 ) -> PathBuf {
@@ -565,7 +567,13 @@ pub fn get_js_output_path(
             .join(spec.get_out_of_source_dir())
             .join(source_path)
     };
-    get_source_file_from_rescript_file(&source, suffix)
+    let basename = file_path_to_compiler_asset_basename(source_path, namespace);
+    // BSC strips the final namespace suffix from its compiler output prefix.
+    let basename = match basename.rsplit_once('-') {
+        Some((stem, _)) => stem,
+        None => &basename,
+    };
+    source.with_file_name(format!("{basename}{suffix}"))
 }
 
 pub fn is_local_package(workspace_path: &Path, canonical_package_path: &Path) -> bool {
@@ -610,7 +618,7 @@ mod js_output_tests {
                 suffix: None,
             };
             assert_eq!(
-                get_js_output_path(package, source, &spec, suffix),
+                get_js_output_path(package, source, &packages::Namespace::NoNamespace, &spec, suffix),
                 Path::new(expected)
             );
         }
