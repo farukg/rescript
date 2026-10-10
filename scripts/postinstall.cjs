@@ -29,6 +29,7 @@ function expectedSourceSha() {
   for (const pattern of [
     /farukg-rescript-([0-9a-f]{7,40})/i,
     /farukg\+rescript\+([0-9a-f]{7,40})/i,
+    /github\.com\+farukg\+rescript\.git\+([0-9a-f]{7,40})/i,
     // pnpm normalisiert github/git+ssh auf codeload-Tarballs; der Store-Pfad
     // trägt den SHA nach "tar.gz+" (evtl. gekürzt + pnpm-Hash-Suffix).
     /farukg\+rescript\+tar\.gz\+([0-9a-f]{7,40})/i,
