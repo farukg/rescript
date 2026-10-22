@@ -18,17 +18,17 @@ function compare(a, b) {
   let a_type = typeof a;
   let b_type = typeof b;
   switch (a_type) {
-    case "bigint" :
+      case "bigint" :
       if (b_type === "bigint") {
         return Primitive_float.compare(a, b);
       }
       break;
-    case "boolean" :
+      case "boolean" :
       if (b_type === "boolean") {
         return Primitive_bool.compare(a, b);
       }
       break;
-    case "function" :
+      case "function" :
       if (b_type === "function") {
         throw {
           RE_EXN_ID: "Invalid_argument",
@@ -37,26 +37,26 @@ function compare(a, b) {
         };
       }
       break;
-    case "number" :
+      case "number" :
       if (b_type === "number") {
         return Primitive_float.compare(a, b);
       }
       break;
-    case "string" :
+      case "string" :
       if (b_type === "string") {
         return Primitive_string.compare(a, b);
       } else {
         return 1;
       }
-    case "undefined" :
+      case "undefined" :
       return -1;
   }
   switch (b_type) {
-    case "string" :
+      case "string" :
       return -1;
-    case "undefined" :
+      case "undefined" :
       return 1;
-    default:
+      default:
       if (a_type === "boolean") {
         return 1;
       }

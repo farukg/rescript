@@ -562,7 +562,7 @@ function fillArrayKey(_n, _i, arr) {
     let l = n.l;
     let r = n.r;
     let next = l !== undefined ? fillArrayKey(l, i, arr) : i;
-    arr[next] = v;
+      arr[next] = v;
     let rnext = next + 1 | 0;
     if (r === undefined) {
       return rnext;
@@ -580,7 +580,7 @@ function fillArrayValue(_n, _i, arr) {
     let l = n.l;
     let r = n.r;
     let next = l !== undefined ? fillArrayValue(l, i, arr) : i;
-    arr[next] = n.v;
+      arr[next] = n.v;
     let rnext = next + 1 | 0;
     if (r === undefined) {
       return rnext;
@@ -599,7 +599,7 @@ function fillArray(_n, _i, arr) {
     let v = n.k;
     let r = n.r;
     let next = l !== undefined ? fillArray(l, i, arr) : i;
-    arr[next] = [
+      arr[next] = [
       v,
       n.v
     ];
@@ -645,12 +645,12 @@ function valuesToArray(n) {
 
 function fromSortedArrayRevAux(arr, off, len) {
   switch (len) {
-    case 0 :
+      case 0 :
       return;
-    case 1 :
+      case 1 :
       let match = arr[off];
       return singleton(match[0], match[1]);
-    case 2 :
+      case 2 :
       let match_0 = arr[off];
       let match_1 = arr[off - 1 | 0];
       let match$1 = match_1;
@@ -662,7 +662,7 @@ function fromSortedArrayRevAux(arr, off, len) {
         l: singleton(match$2[0], match$2[1]),
         r: undefined
       };
-    case 3 :
+      case 3 :
       let match_0$1 = arr[off];
       let match_1$1 = arr[off - 1 | 0];
       let match_2 = arr[off - 2 | 0];
@@ -676,7 +676,7 @@ function fromSortedArrayRevAux(arr, off, len) {
         l: singleton(match$5[0], match$5[1]),
         r: singleton(match$3[0], match$3[1])
       };
-    default:
+      default:
       let nl = len / 2 | 0;
       let left = fromSortedArrayRevAux(arr, off, nl);
       let match$6 = arr[off - nl | 0];
@@ -687,12 +687,12 @@ function fromSortedArrayRevAux(arr, off, len) {
 
 function fromSortedArrayAux(arr, off, len) {
   switch (len) {
-    case 0 :
+      case 0 :
       return;
-    case 1 :
+      case 1 :
       let match = arr[off];
       return singleton(match[0], match[1]);
-    case 2 :
+      case 2 :
       let match_0 = arr[off];
       let match_1 = arr[off + 1 | 0];
       let match$1 = match_1;
@@ -704,7 +704,7 @@ function fromSortedArrayAux(arr, off, len) {
         l: singleton(match$2[0], match$2[1]),
         r: undefined
       };
-    case 3 :
+      case 3 :
       let match_0$1 = arr[off];
       let match_1$1 = arr[off + 1 | 0];
       let match_2 = arr[off + 2 | 0];
@@ -718,7 +718,7 @@ function fromSortedArrayAux(arr, off, len) {
         l: singleton(match$5[0], match$5[1]),
         r: singleton(match$3[0], match$3[1])
       };
-    default:
+      default:
       let nl = len / 2 | 0;
       let left = fromSortedArrayAux(arr, off, nl);
       let match$6 = arr[off + nl | 0];

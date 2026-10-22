@@ -38,21 +38,21 @@ function classify(x) {
 
 function test(x, v) {
   switch (v) {
-    case "String" :
+      case "String" :
       return typeof x === "string";
-    case "Number" :
+      case "Number" :
       return typeof x === "number";
-    case "Object" :
+      case "Object" :
       if (x !== null && typeof x === "object") {
         return !Array.isArray(x);
       } else {
         return false;
       }
-    case "Array" :
+      case "Array" :
       return Array.isArray(x);
-    case "Boolean" :
+      case "Boolean" :
       return typeof x === "boolean";
-    case "Null" :
+      case "Null" :
       return x === null;
   }
 }

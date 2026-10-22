@@ -106,7 +106,7 @@ function splitAuxNoPivot(cmp, n, x) {
     }
     let match = splitAuxNoPivot(cmp, l, x);
     return [
-      match[0],
+        match[0],
       Belt_internalAVLset.joinShared(match[1], v, r)
     ];
   }
@@ -119,7 +119,7 @@ function splitAuxNoPivot(cmp, n, x) {
   let match$1 = splitAuxNoPivot(cmp, r, x);
   return [
     Belt_internalAVLset.joinShared(l, v, match$1[0]),
-    match$1[1]
+      match$1[1]
   ];
 }
 
@@ -144,7 +144,7 @@ function splitAuxPivot(cmp, n, x, pres) {
     }
     let match = splitAuxPivot(cmp, l, x, pres);
     return [
-      match[0],
+        match[0],
       Belt_internalAVLset.joinShared(match[1], v, r)
     ];
   }
@@ -157,7 +157,7 @@ function splitAuxPivot(cmp, n, x, pres) {
   let match$1 = splitAuxPivot(cmp, r, x, pres);
   return [
     Belt_internalAVLset.joinShared(l, v, match$1[0]),
-    match$1[1]
+      match$1[1]
   ];
 }
 

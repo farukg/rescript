@@ -155,7 +155,7 @@ function splitAuxPivot(n, x, pres, cmp) {
     }
     let match = splitAuxPivot(l, x, pres, cmp);
     return [
-      match[0],
+        match[0],
       Belt_internalAVLtree.join(match[1], v, d, r)
     ];
   }
@@ -168,7 +168,7 @@ function splitAuxPivot(n, x, pres, cmp) {
   let match$1 = splitAuxPivot(r, x, pres, cmp);
   return [
     Belt_internalAVLtree.join(l, v, d, match$1[0]),
-    match$1[1]
+      match$1[1]
   ];
 }
 

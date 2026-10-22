@@ -30,7 +30,7 @@ function clear(h) {
   let h_buckets = h.buckets;
   let len = h_buckets.length;
   for (let i = 0; i < len; ++i) {
-    h_buckets[i] = undefined;
+      h_buckets[i] = undefined;
   }
 }
 

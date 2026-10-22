@@ -24,7 +24,7 @@ function set(xs, index, newval) {
       Error: new Error()
     };
   }
-  xs[index] = newval;
+    xs[index] = newval;
 }
 
 export {

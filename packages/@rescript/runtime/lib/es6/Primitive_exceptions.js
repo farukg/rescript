@@ -26,10 +26,10 @@ function create(str) {
   let v = idMap[str];
   if (v !== undefined) {
     let id = v + 1 | 0;
-    idMap[str] = id;
+      idMap[str] = id;
     return str + ("/" + id);
   }
-  idMap[str] = 1;
+    idMap[str] = 1;
   return str;
 }
 

@@ -12,12 +12,12 @@ function init(loc, shape) {
   let loop = (shape, struct_, idx) => {
     if (typeof shape !== "object") {
       switch (shape) {
-        case "Function" :
-        case "Lazy" :
-          struct_[idx] = undef_module;
+          case "Function" :
+          case "Lazy" :
+            struct_[idx] = undef_module;
           return;
-        case "Class" :
-          struct_[idx] = [
+          case "Class" :
+            struct_[idx] = [
             undef_module,
             undef_module,
             undef_module,
@@ -27,12 +27,12 @@ function init(loc, shape) {
       }
     } else {
       if (shape.TAG !== "Module") {
-        struct_[idx] = shape._0;
+          struct_[idx] = shape._0;
         return;
       }
       let comps = shape._0;
       let v = {};
-      struct_[idx] = v;
+        struct_[idx] = v;
       let len = comps.length;
       for (let i = 0; i < len; ++i) {
         let match = comps[i];
@@ -51,11 +51,11 @@ function update(shape, o, n) {
   let aux = (shape, o, n, parent, i) => {
     if (typeof shape !== "object") {
       switch (shape) {
-        case "Function" :
-          parent[i] = n;
+          case "Function" :
+            parent[i] = n;
           return;
-        case "Lazy" :
-        case "Class" :
+          case "Lazy" :
+          case "Class" :
           Object.assign(o, n);
           return;
       }

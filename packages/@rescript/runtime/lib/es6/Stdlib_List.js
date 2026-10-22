@@ -610,7 +610,7 @@ function fillAux(arr, _i, _x) {
     if (x === 0) {
       return;
     }
-    arr[i] = x.hd;
+      arr[i] = x.hd;
     _x = x.tl;
     _i = i + 1 | 0;
     continue;

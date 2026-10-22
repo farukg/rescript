@@ -8,23 +8,23 @@ function parseJsValue(value) {
     return;
   }
   switch (value$1.TAG) {
-    case "Bool" :
+      case "Bool" :
       return {
         NAME: "bool",
         VAL: value$1._0
       };
-    case "String" :
+      case "String" :
       switch (value$1._0) {
-        case "always" :
+          case "always" :
           return "always";
-        case "auto" :
+          case "auto" :
           return "auto";
-        case "min2" :
+          case "min2" :
           return "min2";
-        default:
+          default:
           return;
       }
-    default:
+      default:
       return;
   }
 }

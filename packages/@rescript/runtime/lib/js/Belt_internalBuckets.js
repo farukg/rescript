@@ -40,7 +40,7 @@ function copyBuckets(buckets) {
   let len = buckets.length;
   let newBuckets = new Array(len);
   for (let i = 0; i < len; ++i) {
-    newBuckets[i] = copyBucket(buckets[i]);
+      newBuckets[i] = copyBucket(buckets[i]);
   }
   return newBuckets;
 }
@@ -120,7 +120,7 @@ function getBucketHistogram(h) {
   let histo = Belt_Array.makeBy(mbl + 1 | 0, param => 0);
   Belt_Array.forEach(h.buckets, b => {
     let l = bucketLength(0, b);
-    histo[l] = histo[l] + 1 | 0;
+      histo[l] = histo[l] + 1 | 0;
   });
   return histo;
 }
@@ -144,7 +144,7 @@ function filterMapInplaceBucket(f, h, i, _prec, _cell) {
       if (prec !== undefined) {
         cell.next = cell;
       } else {
-        h.buckets[i] = cell;
+          h.buckets[i] = cell;
       }
       cell.value = Primitive_option.valFromOption(data);
       if (n === undefined) {
@@ -160,7 +160,7 @@ function filterMapInplaceBucket(f, h, i, _prec, _cell) {
       if (prec !== undefined) {
         prec.next = n;
       } else {
-        h.buckets[i] = prec;
+          h.buckets[i] = prec;
       }
       return;
     }
@@ -183,7 +183,7 @@ function fillArray(_i, arr, _cell) {
   while (true) {
     let cell = _cell;
     let i = _i;
-    arr[i] = [
+      arr[i] = [
       cell.key,
       cell.value
     ];
@@ -201,7 +201,7 @@ function fillArrayMap(_i, arr, _cell, f) {
   while (true) {
     let cell = _cell;
     let i = _i;
-    arr[i] = f(cell);
+      arr[i] = f(cell);
     let v = cell.next;
     if (v === undefined) {
       return i + 1 | 0;

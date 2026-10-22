@@ -4,29 +4,29 @@
 function classify(value) {
   let match = Object.prototype.toString.call(value);
   switch (match) {
-    case "[object Array]" :
+      case "[object Array]" :
       return {
         TAG: "Array",
         _0: value
       };
-    case "[object Boolean]" :
+      case "[object Boolean]" :
       return {
         TAG: "Bool",
         _0: value
       };
-    case "[object Null]" :
+      case "[object Null]" :
       return "Null";
-    case "[object Number]" :
+      case "[object Number]" :
       return {
         TAG: "Number",
         _0: value
       };
-    case "[object String]" :
+      case "[object String]" :
       return {
         TAG: "String",
         _0: value
       };
-    default:
+      default:
       return {
         TAG: "Object",
         _0: value

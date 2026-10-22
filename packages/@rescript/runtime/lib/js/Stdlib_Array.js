@@ -18,7 +18,7 @@ function fromInitializer(length, f) {
   }
   let arr = new Array(length);
   for (let i = 0; i < length; ++i) {
-    arr[i] = f(i);
+      arr[i] = f(i);
   }
   return arr;
 }
@@ -117,8 +117,8 @@ function findLastIndexOpt(array, finder) {
 
 function swapUnsafe(xs, i, j) {
   let tmp = xs[i];
-  xs[i] = xs[j];
-  xs[j] = tmp;
+    xs[i] = xs[j];
+    xs[j] = tmp;
 }
 
 function random_int(min, max) {
@@ -146,7 +146,7 @@ function filterMap(a, f) {
     let v = a[i];
     let v$1 = f(v);
     if (v$1 !== undefined) {
-      r[j] = Primitive_option.valFromOption(v$1);
+        r[j] = Primitive_option.valFromOption(v$1);
       j = j + 1 | 0;
     }
   }
@@ -166,7 +166,7 @@ function filterMapWithIndex(a, f) {
     let v = a[i];
     let v$1 = f(v, i);
     if (v$1 !== undefined) {
-      r[j] = Primitive_option.valFromOption(v$1);
+        r[j] = Primitive_option.valFromOption(v$1);
       j = j + 1 | 0;
     }
   }
@@ -196,9 +196,9 @@ function zip(xs, ys) {
   let len = Primitive_int.min(lenx, leny);
   let s = new Array(len);
   for (let i = 0; i < len; ++i) {
-    s[i] = [
-      xs[i],
-      ys[i]
+      s[i] = [
+        xs[i],
+        ys[i]
     ];
   }
   return s;
@@ -210,7 +210,7 @@ function zipBy(xs, ys, f) {
   let len = Primitive_int.min(lenx, leny);
   let s = new Array(len);
   for (let i = 0; i < len; ++i) {
-    s[i] = f(xs[i], ys[i]);
+      s[i] = f(xs[i], ys[i]);
   }
   return s;
 }
@@ -224,10 +224,10 @@ function partition(a, f) {
   for (let ii = 0; ii < l; ++ii) {
     let v = a[ii];
     if (f(v)) {
-      a1[i] = v;
+        a1[i] = v;
       i = i + 1 | 0;
     } else {
-      a2[j] = v;
+        a2[j] = v;
       j = j + 1 | 0;
     }
   }
@@ -245,8 +245,8 @@ function unzip(a) {
   let a2 = new Array(l);
   for (let i = 0; i < l; ++i) {
     let match = a[i];
-    a1[i] = match[0];
-    a2[i] = match[1];
+      a1[i] = match[0];
+      a2[i] = match[1];
   }
   return [
     a1,

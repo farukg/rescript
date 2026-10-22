@@ -370,7 +370,7 @@ function fillArray(_n, _i, arr) {
     let l = n.l;
     let r = n.r;
     let next = l !== undefined ? fillArray(l, i, arr) : i;
-    arr[next] = v;
+      arr[next] = v;
     let rnext = next + 1 | 0;
     if (r === undefined) {
       return rnext;
@@ -392,11 +392,11 @@ function fillArrayWithPartition(_n, cursor, arr, p) {
     }
     if (p(v)) {
       let c = cursor.forward;
-      arr[c] = v;
+        arr[c] = v;
       cursor.forward = c + 1 | 0;
     } else {
       let c$1 = cursor.backward;
-      arr[c$1] = v;
+        arr[c$1] = v;
       cursor.backward = c$1 - 1 | 0;
     }
     if (r === undefined) {
@@ -437,11 +437,11 @@ function toArray(n) {
 
 function fromSortedArrayRevAux(arr, off, len) {
   switch (len) {
-    case 0 :
+      case 0 :
       return;
-    case 1 :
+      case 1 :
       return singleton(arr[off]);
-    case 2 :
+      case 2 :
       let x0 = arr[off];
       let x1 = arr[off - 1 | 0];
       return {
@@ -450,7 +450,7 @@ function fromSortedArrayRevAux(arr, off, len) {
         l: singleton(x0),
         r: undefined
       };
-    case 3 :
+      case 3 :
       let x0$1 = arr[off];
       let x1$1 = arr[off - 1 | 0];
       let x2 = arr[off - 2 | 0];
@@ -460,7 +460,7 @@ function fromSortedArrayRevAux(arr, off, len) {
         l: singleton(x0$1),
         r: singleton(x2)
       };
-    default:
+      default:
       let nl = len / 2 | 0;
       let left = fromSortedArrayRevAux(arr, off, nl);
       let mid = arr[off - nl | 0];
@@ -471,11 +471,11 @@ function fromSortedArrayRevAux(arr, off, len) {
 
 function fromSortedArrayAux(arr, off, len) {
   switch (len) {
-    case 0 :
+      case 0 :
       return;
-    case 1 :
+      case 1 :
       return singleton(arr[off]);
-    case 2 :
+      case 2 :
       let x0 = arr[off];
       let x1 = arr[off + 1 | 0];
       return {
@@ -484,7 +484,7 @@ function fromSortedArrayAux(arr, off, len) {
         l: singleton(x0),
         r: undefined
       };
-    case 3 :
+      case 3 :
       let x0$1 = arr[off];
       let x1$1 = arr[off + 1 | 0];
       let x2 = arr[off + 2 | 0];
@@ -494,7 +494,7 @@ function fromSortedArrayAux(arr, off, len) {
         l: singleton(x0$1),
         r: singleton(x2)
       };
-    default:
+      default:
       let nl = len / 2 | 0;
       let left = fromSortedArrayAux(arr, off, nl);
       let mid = arr[off + nl | 0];

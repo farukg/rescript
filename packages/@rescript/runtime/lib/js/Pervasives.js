@@ -67,11 +67,11 @@ function string_of_bool(b) {
 
 function bool_of_string(param) {
   switch (param) {
-    case "false" :
+      case "false" :
       return false;
-    case "true" :
+      case "true" :
       return true;
-    default:
+      default:
       throw {
         RE_EXN_ID: "Invalid_argument",
         _1: "bool_of_string",
@@ -82,11 +82,11 @@ function bool_of_string(param) {
 
 function bool_of_string_opt(param) {
   switch (param) {
-    case "false" :
+      case "false" :
       return false;
-    case "true" :
+      case "true" :
       return true;
-    default:
+      default:
       return;
   }
 }

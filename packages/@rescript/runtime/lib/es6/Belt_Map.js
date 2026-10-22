@@ -72,7 +72,7 @@ function split(m, x) {
         data: match$1[1]
       }
     ],
-    match[1]
+      match[1]
   ];
 }
 

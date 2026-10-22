@@ -11,22 +11,22 @@ function toString(b) {
 
 function fromString(s) {
   switch (s) {
-    case "false" :
+      case "false" :
       return false;
-    case "true" :
+      case "true" :
       return true;
-    default:
+      default:
       return;
   }
 }
 
 function fromStringOrThrow(param) {
   switch (param) {
-    case "false" :
+      case "false" :
       return false;
-    case "true" :
+      case "true" :
       return true;
-    default:
+      default:
       throw {
         RE_EXN_ID: "Invalid_argument",
         _1: `Bool.fromStringOrThrow: value is neither "true" nor "false"`,

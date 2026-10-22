@@ -16,9 +16,9 @@ function copyBucketReHash(h_buckets, ndata_tail, _old_bucket) {
     if (tail !== undefined) {
       tail.next = old_bucket;
     } else {
-      h_buckets[nidx] = old_bucket;
+        h_buckets[nidx] = old_bucket;
     }
-    ndata_tail[nidx] = old_bucket;
+      ndata_tail[nidx] = old_bucket;
     _old_bucket = old_bucket.next;
     continue;
   };
@@ -47,7 +47,7 @@ function set(h, key, value) {
   let l = h_buckets[i];
   if (l !== undefined) {
     if (replaceInBucket(key, value, l)) {
-      h_buckets[i] = {
+        h_buckets[i] = {
         key: key,
         value: value,
         next: l
@@ -55,7 +55,7 @@ function set(h, key, value) {
       h.size = h.size + 1 | 0;
     }
   } else {
-    h_buckets[i] = {
+      h_buckets[i] = {
       key: key,
       value: value,
       next: undefined
@@ -91,7 +91,7 @@ function remove(h, key) {
   let bucket = h_buckets[i];
   if (bucket !== undefined) {
     if (bucket.key === key) {
-      h_buckets[i] = bucket.next;
+        h_buckets[i] = bucket.next;
       h.size = h.size - 1 | 0;
       return;
     } else {
