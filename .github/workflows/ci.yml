@@ -350,7 +350,7 @@ jobs:
         run: node scripts/rewatchTestEnvironment.cjs
 
       - name: Run rewatch unit tests
-        run: cargo test --manifest-path rewatch/Cargo.toml --release
+        run: node scripts/ci/testRewatch.cjs
 
       - name: "Syntax: Run tests"
         env:

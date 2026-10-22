@@ -45,11 +45,8 @@ jobs:
           yarn install
           opam install . --deps-only --with-test
 
-      - name: Build compiler
-        run: opam exec -- dune build --profile static
-
-      - name: Copy compiler binaries
-        run: node scripts/copyExes.js --compiler
+      - name: Build and assemble compiler
+        run: bash scripts/ci/buildStaticCompiler.sh
 
       - name: Restore rewatch build cache
         uses: actions/cache@v4
