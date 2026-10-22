@@ -31,7 +31,17 @@ function writePackageSourceSha(root) {
         "Package source identity requires its own repository root.",
       );
     }
-    if (git(["status", "--porcelain", "--untracked-files=normal"])) {
+    // The generated file inventory cannot change installed source behavior.
+    if (
+      git([
+        "status",
+        "--porcelain",
+        "--untracked-files=normal",
+        "--",
+        ".",
+        ":(exclude)packages/artifacts.json",
+      ])
+    ) {
       throw new Error("Commit package source changes before packing ReScript.");
     }
     sha = git(["rev-parse", "HEAD"]);
