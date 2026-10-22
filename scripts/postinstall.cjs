@@ -2,6 +2,7 @@
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
+const { packagedSourceSha } = require("./sourceIdentity.cjs");
 
 const REPO = "farukg/rescript";
 const RELEASE_TAG = "patched";
@@ -38,22 +39,7 @@ function expectedSourceSha() {
     if (match) return match[1].toLowerCase();
   }
 
-  // file:/link-Installationen tragen keinen SHA im Pfad: ein daneben
-  // mitinstalliertes source-sha.txt (aus dem Fork-Checkout) ist die Quelle.
-  const packagedSha = path.join(
-    installPath,
-    "packages",
-    "@rescript",
-    "source-sha.txt"
-  );
-  try {
-    return fs
-      .readFileSync(packagedSha, "utf8")
-      .trim()
-      .toLowerCase();
-  } catch {
-    return null;
-  }
+  return packagedSourceSha(installPath);
 }
 
 function getPlatformKey() {
@@ -70,7 +56,7 @@ function getPlatformKey() {
   if (!key) {
     console.warn(
       `[rescript-patched] Unsupported platform ${platform}-${arch}. ` +
-        `Supported: linux-x64, linux-arm64, darwin-arm64, darwin-x64, win32-x64.`
+        `Supported: linux-x64, linux-arm64, darwin-arm64, darwin-x64, win32-x64.`,
     );
     return null;
   }
@@ -86,7 +72,7 @@ function getBinDir() {
     "packages",
     "@rescript",
     platformKey,
-    "bin"
+    "bin",
   );
 }
 
@@ -96,12 +82,13 @@ function installedToolchainMatchesExpected() {
   const expectedSha = expectedSourceSha();
   const sourceShaPath = path.join(binDir, SOURCE_SHA_ASSET);
   if (!expectedSha || !fs.existsSync(sourceShaPath)) return false;
-  const installedSha = fs.readFileSync(sourceShaPath, "utf8").trim().toLowerCase();
+  const installedSha = fs
+    .readFileSync(sourceShaPath, "utf8")
+    .trim()
+    .toLowerCase();
   return (
     installedSha.startsWith(expectedSha) &&
-    BINARIES.every((binary) =>
-      fs.existsSync(path.join(binDir, `${binary}.exe`))
-    )
+    BINARIES.every(binary => fs.existsSync(path.join(binDir, `${binary}.exe`)))
   );
 }
 
@@ -117,7 +104,7 @@ async function downloadToolchain() {
   const platformKey = getPlatformKey();
   if (!platformKey) {
     console.log(
-      `[rescript-patched] No prebuilt toolchain for this platform. Trying source build...`
+      `[rescript-patched] No prebuilt toolchain for this platform. Trying source build...`,
     );
     return false;
   }
@@ -128,9 +115,7 @@ async function downloadToolchain() {
   const previousDir = path.join(binParentDir, `.bin-previous-${process.pid}`);
   const expectedSha = expectedSourceSha();
 
-  console.log(
-    `[rescript-patched] Downloading toolchain for ${platformKey}...`
-  );
+  console.log(`[rescript-patched] Downloading toolchain for ${platformKey}...`);
 
   try {
     fs.mkdirSync(binParentDir, { recursive: true });
@@ -138,12 +123,15 @@ async function downloadToolchain() {
     const sourceShaPath = path.join(stagingDir, SOURCE_SHA_ASSET);
     await downloadFile(
       `https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${SOURCE_SHA_ASSET}`,
-      sourceShaPath
+      sourceShaPath,
     );
-    const releasedSha = fs.readFileSync(sourceShaPath, "utf8").trim().toLowerCase();
+    const releasedSha = fs
+      .readFileSync(sourceShaPath, "utf8")
+      .trim()
+      .toLowerCase();
     if (!expectedSha || !releasedSha.startsWith(expectedSha)) {
       throw new Error(
-        `Released toolchain ${releasedSha || "has no source SHA"} does not match installed source ${expectedSha || "with unknown SHA"}`
+        `Released toolchain ${releasedSha || "has no source SHA"} does not match installed source ${expectedSha || "with unknown SHA"}`,
       );
     }
     for (const binary of BINARIES) {
@@ -171,7 +159,7 @@ async function downloadToolchain() {
       fs.rmSync(previousDir, { recursive: true, force: true });
     } catch (err) {
       console.warn(
-        `[rescript-patched] Toolchain activated, but the previous directory could not be removed: ${err.message}`
+        `[rescript-patched] Toolchain activated, but the previous directory could not be removed: ${err.message}`,
       );
     }
     console.log(`[rescript-patched] Toolchain installed to ${binDir}`);
@@ -184,32 +172,38 @@ async function downloadToolchain() {
       fs.rmSync(previousDir, { recursive: true, force: true });
     }
     console.warn(
-      `[rescript-patched] Download failed: ${err.message}. Trying source build...`
+      `[rescript-patched] Download failed: ${err.message}. Trying source build...`,
     );
     return false;
   }
 }
 
 function buildFromSource() {
-  console.log(
-    `[rescript-patched] Building toolchain from source...`
-  );
+  console.log(`[rescript-patched] Building toolchain from source...`);
   try {
     const rootDir = path.join(__dirname, "..");
     execSync("make", { cwd: rootDir, stdio: "inherit" });
     console.log(`[rescript-patched] Source build completed.`);
     return true;
   } catch (err) {
-    console.error(
-      `[rescript-patched] Source build failed: ${err.message}`
-    );
+    console.error(`[rescript-patched] Source build failed: ${err.message}`);
     return false;
   }
 }
 
 async function main() {
   if (isSourceCheckout()) {
-    console.log(`[rescript-patched] Source checkout detected, skipping install.`);
+    console.log(
+      `[rescript-patched] Source checkout detected, skipping install.`,
+    );
+    return;
+  }
+
+  if (!expectedSourceSha()) {
+    console.error(
+      `[rescript-patched] Cannot identify package source. For a file: dependency, run "npm run prepack" in its clean source checkout before installing. Source archives must retain the Git-expanded source-sha.txt.`,
+    );
+    process.exit(1);
     return;
   }
 
@@ -228,12 +222,12 @@ async function main() {
     `[rescript-patched] FAILED: Could not install the toolchain.\n` +
       `  - Prebuilt toolchain not available for your platform\n` +
       `  - Source build failed\n` +
-      `  - Manual fix: build with "make" in the repo root`
+      `  - Manual fix: build with "make" in the repo root`,
   );
   process.exit(1);
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error(`[rescript-patched] Unexpected error: ${err.message}`);
   process.exit(1);
 });

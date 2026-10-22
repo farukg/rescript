@@ -47,7 +47,10 @@ async function getArtifacts(pkg) {
     }
   }
 
-  await exitCode;
+  const code = await exitCode;
+  if (code !== 0) {
+    throw new Error(`Packing ${pkg} failed with exit code ${code}`);
+  }
 
   return files;
 }

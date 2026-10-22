@@ -100,6 +100,15 @@ jobs:
       - name: Install npm packages
         run: yarn install
 
+      - name: Install package-test pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - name: Run package installer tests
+        run: npm run test-installation
+
       - name: Install testrepo deps
         run: cd rewatch/testrepo && yarn install
 
@@ -131,7 +140,6 @@ jobs:
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
       - name: Install rust toolchain
-        if: steps.rewatch-build-cache.outputs.cache-hit != 'true'
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ steps.rust-version.outputs.version }}
@@ -147,11 +155,6 @@ jobs:
         if: steps.rewatch-build-cache.outputs.cache-hit != 'true'
         run: |
           cargo clippy --manifest-path rewatch/Cargo.toml --all-targets --all-features
-
-      - name: Run rewatch unit tests
-        if: steps.rewatch-build-cache.outputs.cache-hit != 'true'
-        run: |
-          cargo test --manifest-path rewatch/Cargo.toml --release
 
       - name: Copy rewatch binary
         run: |
@@ -335,6 +338,13 @@ jobs:
       - name: Copy ninja exe to platform bin dir
         run: node scripts/copyExes.js --ninja
 
+      - name: Bind compiler for rewatch tests
+        shell: bash
+        run: node -e 'require("node:fs").appendFileSync(process.env.GITHUB_ENV, "RESCRIPT_BSC_EXE=" + require("node:path").resolve("packages/@rescript/${{ matrix.node-target }}/bin/bsc.exe") + "\n")'
+
+      - name: Run rewatch unit tests
+        run: cargo test --manifest-path rewatch/Cargo.toml --release
+
       - name: "Syntax: Run tests"
         env:
           ROUNDTRIP_TEST: ${{ runner.os == 'Windows' && '0' || '1' }}
@@ -487,6 +497,7 @@ jobs:
       - name: Name release assets
         run: |
           mkdir -p release-binaries
+          printf '%s\n' "${{ github.sha }}" > release-binaries/source-sha.txt
           for dir in artifacts/binaries-*; do
             platform="${dir#artifacts/binaries-}"
             for binary in "$dir"/*.exe; do

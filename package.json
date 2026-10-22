@@ -49,7 +49,9 @@
     "rescript-tools": "cli/rescript-tools.js"
   },
   "scripts": {
+    "prepack": "node scripts/preparePackage.cjs",
     "postinstall": "node scripts/postinstall.cjs",
+    "test-installation": "node --test tests/package_tests/*.test.cjs",
     "test": "node scripts/test.js -all",
     "test-bsb": "node scripts/test.js -bsb",
     "test-ocaml": "node scripts/test.js -ounit",
@@ -69,7 +71,10 @@
     "docs/docson/build-schema.json",
     "cli",
     "scripts/postinstall.cjs",
+    "scripts/sourceIdentity.cjs",
+    "scripts/preparePackage.cjs",
     "packages/@rescript/source-sha.txt",
+    "packages/@rescript/packaged-source-sha.txt",
     "packages/@rescript/linux-x64/bin/rescript.exe"
   ],
   "exports": {
