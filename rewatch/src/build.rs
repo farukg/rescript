@@ -697,6 +697,13 @@ mod tests {
     }
 
     fn build_output_fixture(root: &Path) -> BuildCommandState {
+        let runtime = std::env::var_os("RESCRIPT_RUNTIME")
+            .map(PathBuf::from)
+            .expect("compiler fixtures require RESCRIPT_RUNTIME bound to the compiler's built @rescript/runtime package");
+        assert!(
+            runtime.is_absolute() && runtime.join("lib/ocaml/Stdlib.cmi").is_file(),
+            "RESCRIPT_RUNTIME must identify an absolute built runtime package; build @rescript/runtime before compiler fixtures"
+        );
         build(&None, root, false, false, false, true, None, false).expect("fixture must compile")
     }
 

@@ -338,9 +338,16 @@ jobs:
       - name: Copy ninja exe to platform bin dir
         run: node scripts/copyExes.js --ninja
 
-      - name: Bind compiler for rewatch tests
+      - name: Build @rescript/runtime
+        run: yarn workspace @rescript/runtime build
         shell: bash
-        run: node -e 'require("node:fs").appendFileSync(process.env.GITHUB_ENV, "RESCRIPT_BSC_EXE=" + require("node:path").resolve("packages/@rescript/${{ matrix.node-target }}/bin/bsc.exe") + "\n")'
+
+      - name: Check for changes in @rescript/runtime/lib
+        run: git diff --exit-code lib/js lib/es6
+        working-directory: packages/@rescript/runtime
+
+      - name: Bind compiler and runtime for rewatch tests
+        run: node scripts/rewatchTestEnvironment.cjs
 
       - name: Run rewatch unit tests
         run: cargo test --manifest-path rewatch/Cargo.toml --release
@@ -350,14 +357,6 @@ jobs:
           ROUNDTRIP_TEST: ${{ runner.os == 'Windows' && '0' || '1' }}
         run: ./scripts/test_syntax.sh
         shell: bash
-
-      - name: Build @rescript/runtime
-        run: yarn workspace @rescript/runtime build
-        shell: bash
-
-      - name: Check for changes in @rescript/runtime/lib
-        run: git diff --exit-code lib/js lib/es6
-        working-directory: packages/@rescript/runtime
 
       - name: Version Check
         run: yarn constraints
