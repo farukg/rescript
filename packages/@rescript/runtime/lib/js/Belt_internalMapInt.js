@@ -151,8 +151,8 @@ function splitAux(x, n) {
     }
     let match = splitAux(x, l);
     return [
-      match[0],
-      match[1],
+        match[0],
+        match[1],
       Belt_internalAVLtree.join(match[2], v, d, r)
     ];
   }
@@ -166,8 +166,8 @@ function splitAux(x, n) {
   let match$1 = splitAux(x, r);
   return [
     Belt_internalAVLtree.join(l, v, d, match$1[0]),
-    match$1[1],
-    match$1[2]
+      match$1[1],
+      match$1[2]
   ];
 }
 

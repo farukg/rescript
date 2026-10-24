@@ -1,5 +1,8 @@
 // @ts-check
 
+import * as fs from "node:fs";
+import * as path from "node:path";
+
 const minimumNodeVersion = "20.11.0";
 
 /**
@@ -17,13 +20,13 @@ const supportedPlatforms = [
 ];
 
 /** @type {BinaryModuleExports} */
-let mod;
+let upstream;
 
 if (supportedPlatforms.includes(target)) {
   const binPackageName = `@rescript/${target}`;
 
   try {
-    mod = await import(binPackageName);
+    upstream = await import(binPackageName);
   } catch {
     // First check if we are on an unsupported node version, as that may be the cause for the error.
     checkNodeVersionSupported();
@@ -36,18 +39,49 @@ if (supportedPlatforms.includes(target)) {
   throw new Error(`Platform ${target} is not supported!`);
 }
 
+const patchedBinDir = path.join(
+  import.meta.dirname,
+  "..",
+  "..",
+  "packages",
+  "@rescript",
+  target,
+  "bin",
+);
+
+const patchedBinPaths = {
+  bsb_helper_exe: path.join(patchedBinDir, "bsb_helper.exe"),
+  bsc_exe: path.join(patchedBinDir, "bsc.exe"),
+  ninja_exe: path.join(patchedBinDir, "ninja.exe"),
+  rescript_editor_analysis_exe: path.join(
+    patchedBinDir,
+    "rescript-editor-analysis.exe",
+  ),
+  rescript_tools_exe: path.join(patchedBinDir, "rescript-tools.exe"),
+  rescript_legacy_exe: path.join(patchedBinDir, "rescript-legacy.exe"),
+  rescript_exe: path.join(patchedBinDir, "rescript.exe"),
+};
+
+const patchedToolchainComplete = Object.values(patchedBinPaths).every((file) =>
+  fs.existsSync(file),
+);
+
+export const binDir = patchedToolchainComplete
+  ? patchedBinDir
+  : upstream.binDir;
+export const binPaths = patchedToolchainComplete
+  ? patchedBinPaths
+  : upstream.binPaths;
+
 export const {
-  binDir,
-  binPaths: {
-    bsb_helper_exe,
-    bsc_exe,
-    ninja_exe,
-    rescript_editor_analysis_exe,
-    rescript_tools_exe,
-    rescript_legacy_exe,
-    rescript_exe,
-  },
-} = mod;
+  bsb_helper_exe,
+  bsc_exe,
+  ninja_exe,
+  rescript_editor_analysis_exe,
+  rescript_tools_exe,
+  rescript_legacy_exe,
+  rescript_exe,
+} = binPaths;
 
 function checkNodeVersionSupported() {
   if (

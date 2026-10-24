@@ -100,6 +100,15 @@ jobs:
       - name: Install npm packages
         run: yarn install
 
+      - name: Install package-test pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - name: Run package installer tests
+        run: npm run test-installation
+
       - name: Install testrepo deps
         run: cd rewatch/testrepo && yarn install
 
@@ -131,7 +140,6 @@ jobs:
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
       - name: Install rust toolchain
-        if: steps.rewatch-build-cache.outputs.cache-hit != 'true'
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ steps.rust-version.outputs.version }}
@@ -147,11 +155,6 @@ jobs:
         if: steps.rewatch-build-cache.outputs.cache-hit != 'true'
         run: |
           cargo clippy --manifest-path rewatch/Cargo.toml --all-targets --all-features
-
-      - name: Run rewatch unit tests
-        if: steps.rewatch-build-cache.outputs.cache-hit != 'true'
-        run: |
-          cargo test --manifest-path rewatch/Cargo.toml --release
 
       - name: Copy rewatch binary
         run: |
@@ -335,12 +338,6 @@ jobs:
       - name: Copy ninja exe to platform bin dir
         run: node scripts/copyExes.js --ninja
 
-      - name: "Syntax: Run tests"
-        env:
-          ROUNDTRIP_TEST: ${{ runner.os == 'Windows' && '0' || '1' }}
-        run: ./scripts/test_syntax.sh
-        shell: bash
-
       - name: Build @rescript/runtime
         run: yarn workspace @rescript/runtime build
         shell: bash
@@ -348,6 +345,18 @@ jobs:
       - name: Check for changes in @rescript/runtime/lib
         run: git diff --exit-code lib/js lib/es6
         working-directory: packages/@rescript/runtime
+
+      - name: Bind compiler and runtime for rewatch tests
+        run: node scripts/rewatchTestEnvironment.cjs
+
+      - name: Run rewatch unit tests
+        run: node scripts/ci/testRewatch.cjs
+
+      - name: "Syntax: Run tests"
+        env:
+          ROUNDTRIP_TEST: ${{ runner.os == 'Windows' && '0' || '1' }}
+        run: ./scripts/test_syntax.sh
+        shell: bash
 
       - name: Version Check
         run: yarn constraints
@@ -364,7 +373,7 @@ jobs:
 
       - name: Run gentype tests
         if: runner.os != 'Windows'
-        run: make -C tests/gentype_tests/typescript-react-example clean test
+        run: make test-gentype
 
       # On Windows, after running setup-ocaml (if it wasn't cached yet or the cache couldn't be restored),
       # Cygwin bash is used instead of Git Bash for Windows, breaking the rewatch tests.
@@ -469,6 +478,43 @@ jobs:
         with:
           name: api
           path: scripts/res/apiDocs/
+
+  release-patched-toolchains:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs:
+      - build-compiler
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download platform binaries
+        uses: actions/download-artifact@v7
+        with:
+          pattern: binaries-*
+          path: artifacts
+
+      - name: Name release assets
+        run: |
+          mkdir -p release-binaries
+          printf '%s\n' "${{ github.sha }}" > release-binaries/source-sha.txt
+          for dir in artifacts/binaries-*; do
+            platform="${dir#artifacts/binaries-}"
+            for binary in "$dir"/*.exe; do
+              name="$(basename "$binary" .exe)"
+              cp "$binary" "release-binaries/${name}-${platform}.exe"
+            done
+          done
+
+      - name: Update patched toolchain release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: patched
+          name: Patched ReScript Toolchains
+          body: Full platform toolchains built and verified from ${{ github.sha }}.
+          files: release-binaries/*
+          draft: false
+          prerelease: true
+          fail_on_unmatched_files: true
 
   pkg-pr-new:
     needs:

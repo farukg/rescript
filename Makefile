@@ -191,6 +191,8 @@ test-syntax-roundtrip: compiler
 test-gentype: lib ninja
 	make -C tests/gentype_tests/typescript-react-example clean test
 	make -C tests/gentype_tests/stdlib-no-shims clean test
+	make -C tests/gentype_tests/crossdir-imports clean test
+	make -C tests/gentype_tests/runtime-safety clean test
 
 test-rewatch: lib
 	./rewatch/tests/suite.sh $(RESCRIPT_EXE)
@@ -241,6 +243,8 @@ checkformat: | $(YARN_INSTALL_STAMP)
 clean-gentype:
 	make -C tests/gentype_tests/typescript-react-example clean
 	make -C tests/gentype_tests/stdlib-no-shims clean
+	make -C tests/gentype_tests/crossdir-imports clean
+	make -C tests/gentype_tests/runtime-safety clean
 
 clean-tests: clean-gentype
 

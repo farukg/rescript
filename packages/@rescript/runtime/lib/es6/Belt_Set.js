@@ -98,7 +98,7 @@ function split(m, e) {
         data: match$1[1]
       }
     ],
-    match[1]
+      match[1]
   ];
 }
 

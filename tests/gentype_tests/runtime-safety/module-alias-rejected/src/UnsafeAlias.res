@@ -1,0 +1,2 @@
+@genType
+module RuntimeAlias = Owner

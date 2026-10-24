@@ -36,7 +36,6 @@ type t = {
   flush: unit -> unit;
   mutable indent_level: int;
   mutable last_new_line: bool;
-      (* only when we print newline, we print the indent *)
 }
 
 let from_channel chan =
@@ -62,30 +61,26 @@ let from_buffer buf =
    in the future, we can detect this in [s]
 *)
 let string t s =
-  t.output_string s;
-  t.last_new_line <- false
+  if s <> "" then (
+    if t.last_new_line then
+      for _ = 0 to t.indent_level - 1 do
+        t.output_string L.indent_str
+      done;
+    t.output_string s;
+    t.last_new_line <- false)
 
 let newline t =
   if not t.last_new_line then (
     t.output_char '\n';
-    for _ = 0 to t.indent_level - 1 do
-      t.output_string L.indent_str
-    done;
     t.last_new_line <- true)
 
 let at_least_two_lines t =
   if not t.last_new_line then t.output_char '\n';
   t.output_char '\n';
-  for _ = 0 to t.indent_level - 1 do
-    t.output_string L.indent_str
-  done;
   t.last_new_line <- true
 
 let force_newline t =
   t.output_char '\n';
-  for _ = 0 to t.indent_level - 1 do
-    t.output_string L.indent_str
-  done;
   t.last_new_line <- true
 
 let space t = string t L.space

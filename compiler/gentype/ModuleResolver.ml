@@ -101,12 +101,16 @@ let read_source_dirs ~(config : Config.t) =
       let json = source_dirs |> Ext_json_parse.parse_json_from_file in
       if config.bsb_project_root <> config.project_root then
         dirs := read_dirs_from_config ~config
-      else read_dirs json;
+      else (
+        read_dirs json;
+        (* rewatch may omit per-package dirs or emit a shape without a usable
+           `dirs` list; always fall back to rescript.json sources. *)
+        if !dirs = [] then dirs := read_dirs_from_config ~config);
       read_pkgs json
-    with _ -> ()
+    with _ -> dirs := read_dirs_from_config ~config
   else (
     Log_.item "Warning: can't find source dirs: %s\n" source_dirs;
-    Log_.item "Types for cross-references will not be found by genType.\n";
+    Log_.item "Falling back to rescript.json sources for genType module map.\n";
     dirs := read_dirs_from_config ~config);
   {dirs = !dirs; pkgs}
 
@@ -222,32 +226,76 @@ let resolve_module ~(config : Config.t) ~import_extension ~output_file_relative
   in
   if Sys.file_exists module_name_res_file then candidate
   else
-    let rec path_to_list path =
-      let is_root = path |> Filename.basename = path in
-      match is_root with
-      | true -> [path]
-      | false ->
-        (path |> Filename.basename) :: (path |> Filename.dirname |> path_to_list)
+    (* Node-sep-safe directory of a node_rebase_file result (always "/"). *)
+    let node_dirname path =
+      match String.rindex_opt path '/' with
+      | None -> Literals.node_current
+      | Some 0 -> Literals.node_sep
+      | Some i -> String.sub path 0 i
+    in
+    let relative_dir_from_emitter ~resolved_module_dir =
+      Ext_path.node_rebase_file ~from:output_file_relative_dir
+        ~to_:resolved_module_dir "x"
+      |> node_dirname
+    in
+    (* Proactive project-tree rescue when the module map misses: scan
+       rescript.json sources for ModuleName.res elsewhere in the package.
+       In-project peers must never silently emit `./`. Externals still use
+       the historical same-dir candidate. *)
+    let rescue_in_project_module () =
+      let module_base = ModuleName.to_string module_name in
+      let module_base_lower = String.uncapitalize_ascii module_base in
+      let rec search dirs =
+        match dirs with
+        | [] -> None
+        | dir :: rest ->
+          let try_name name =
+            let abs = config.project_root +++ dir +++ (name ^ ".res") in
+            match Sys.file_exists abs with
+            | true -> Some (dir, name)
+            | false -> None
+          in
+          match try_name module_base with
+          | Some _ as hit -> hit
+          | None -> (
+            match try_name module_base_lower with
+            | Some _ as hit -> hit
+            | None -> search rest)
+      in
+      search (read_dirs_from_config ~config)
     in
     match module_name |> apply ~resolver ~use_bs_dependencies with
-    | None -> candidate
+    | None -> (
+      match rescue_in_project_module () with
+      | Some (resolved_module_dir, case_name) ->
+        if !Debug.module_resolution then
+          Log_.item
+            "Module map miss for %s; rescued from config sources at %s\n"
+            (ModuleName.to_string module_name)
+            resolved_module_dir;
+        let from_output_dir_to_module_dir =
+          relative_dir_from_emitter ~resolved_module_dir
+        in
+        ModuleName.from_string_unsafe case_name
+        |> ImportPath.from_module ~dir:from_output_dir_to_module_dir
+             ~import_extension
+      | None ->
+        (* External / unresolved: preserve historical `./Module.ext` candidate.
+           Not a same-dir claim for an in-project peer (those are rescued above). *)
+        if !Debug.module_resolution then
+          Log_.item
+            "Module map miss for %s; treating as external (./ candidate)\n"
+            (ModuleName.to_string module_name);
+        candidate)
     | Some (resolved_module_dir, case, bs_dependencies) ->
-      (* e.g. "dst" in case of dst/ModuleName.res *)
-      let walk_up_output_dir =
-        output_file_relative_dir |> path_to_list
-        |> List.map (fun _ -> Filename.parent_dir_name)
-        |> fun l ->
-        match l with
-        | [] -> ""
-        | _ :: rest -> rest |> List.fold_left ( +++ ) Filename.parent_dir_name
-      in
+      (* Minimal relative dir from the emitter to the resolved module directory.
+         Replaces project-root walk-up (`../../src/foo`) with a normal sibling
+         relative path (`../foo`). *)
       let from_output_dir_to_module_dir =
-        (* e.g. "../dst" *)
         match bs_dependencies with
         | true -> resolved_module_dir
-        | false -> walk_up_output_dir +++ resolved_module_dir
+        | false -> relative_dir_from_emitter ~resolved_module_dir
       in
-      (* e.g. import "../dst/ModuleName.ext" *)
       (match case = Uppercase with
       | true -> module_name
       | false -> module_name |> ModuleName.uncapitalize)

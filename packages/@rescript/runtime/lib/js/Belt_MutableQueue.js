@@ -233,7 +233,7 @@ function fillAux(_i, arr, _cell) {
     if (cell === undefined) {
       return;
     }
-    arr[i] = cell.content;
+      arr[i] = cell.content;
     _cell = cell.next;
     _i = i + 1 | 0;
     continue;

@@ -37,7 +37,7 @@ function copyBuckets(buckets) {
   let len = buckets.length;
   let newBuckets = new Array(len);
   for (let i = 0; i < len; ++i) {
-    newBuckets[i] = copyBucket(buckets[i]);
+      newBuckets[i] = copyBucket(buckets[i]);
   }
   return newBuckets;
 }
@@ -87,7 +87,7 @@ function fillArray(_i, arr, _cell) {
   while (true) {
     let cell = _cell;
     let i = _i;
-    arr[i] = cell.key;
+      arr[i] = cell.key;
     let v = cell.next;
     if (v === undefined) {
       return i + 1 | 0;
@@ -145,7 +145,7 @@ function getBucketHistogram(h) {
   let histo = Belt_Array.makeBy(mbl + 1 | 0, param => 0);
   Belt_Array.forEach(h.buckets, b => {
     let l = bucketLength(0, b);
-    histo[l] = histo[l] + 1 | 0;
+      histo[l] = histo[l] + 1 | 0;
   });
   return histo;
 }

@@ -1,0 +1,233 @@
+#!/usr/bin/env node
+const fs = require("fs");
+const path = require("path");
+const { execSync } = require("child_process");
+const { packagedSourceSha } = require("./sourceIdentity.cjs");
+
+const REPO = "farukg/rescript";
+const RELEASE_TAG = "patched";
+const SOURCE_SHA_ASSET = "source-sha.txt";
+const BINARIES = [
+  "bsb_helper",
+  "bsc",
+  "ninja",
+  "rescript-editor-analysis",
+  "rescript-tools",
+  "rescript-legacy",
+  "rescript",
+];
+
+function isSourceCheckout() {
+  return fs.existsSync(path.join(__dirname, "..", ".git"));
+}
+
+function expectedSourceSha() {
+  const resolved = process.env.npm_package_resolved || "";
+  const resolvedMatch = resolved.match(/#([0-9a-f]{7,40})$/i);
+  if (resolvedMatch) return resolvedMatch[1].toLowerCase();
+
+  const installPath = path.resolve(__dirname, "..");
+  for (const pattern of [
+    /farukg-rescript-([0-9a-f]{7,40})/i,
+    /farukg\+rescript\+([0-9a-f]{7,40})/i,
+    /github\.com\+farukg\+rescript\.git\+([0-9a-f]{7,40})/i,
+    // pnpm normalisiert github/git+ssh auf codeload-Tarballs; der Store-Pfad
+    // trägt den SHA nach "tar.gz+" (evtl. gekürzt + pnpm-Hash-Suffix).
+    /farukg\+rescript\+tar\.gz\+([0-9a-f]{7,40})/i,
+  ]) {
+    const match = installPath.match(pattern);
+    if (match) return match[1].toLowerCase();
+  }
+
+  return packagedSourceSha(installPath);
+}
+
+function getPlatformKey() {
+  const platform = process.platform;
+  const arch = process.arch;
+  const mapping = {
+    "linux-x64": "linux-x64",
+    "linux-arm64": "linux-arm64",
+    "darwin-arm64": "darwin-arm64",
+    "darwin-x64": "darwin-x64",
+    "win32-x64": "win32-x64",
+  };
+  const key = mapping[`${platform}-${arch}`];
+  if (!key) {
+    console.warn(
+      `[rescript-patched] Unsupported platform ${platform}-${arch}. ` +
+        `Supported: linux-x64, linux-arm64, darwin-arm64, darwin-x64, win32-x64.`,
+    );
+    return null;
+  }
+  return key;
+}
+
+function getBinDir() {
+  const platformKey = getPlatformKey();
+  if (!platformKey) return null;
+  return path.join(
+    __dirname,
+    "..",
+    "packages",
+    "@rescript",
+    platformKey,
+    "bin",
+  );
+}
+
+function installedToolchainMatchesExpected() {
+  const binDir = getBinDir();
+  if (!binDir) return false;
+  const expectedSha = expectedSourceSha();
+  const sourceShaPath = path.join(binDir, SOURCE_SHA_ASSET);
+  if (!expectedSha || !fs.existsSync(sourceShaPath)) return false;
+  const installedSha = fs
+    .readFileSync(sourceShaPath, "utf8")
+    .trim()
+    .toLowerCase();
+  return (
+    installedSha.startsWith(expectedSha) &&
+    BINARIES.every(binary => fs.existsSync(path.join(binDir, `${binary}.exe`)))
+  );
+}
+
+async function downloadFile(url, dest) {
+  const response = await fetch(url, { redirect: "follow" });
+  if (!response.ok) {
+    throw new Error(`Download failed with status ${response.status}: ${url}`);
+  }
+  fs.writeFileSync(dest, Buffer.from(await response.arrayBuffer()));
+}
+
+async function downloadToolchain() {
+  const platformKey = getPlatformKey();
+  if (!platformKey) {
+    console.log(
+      `[rescript-patched] No prebuilt toolchain for this platform. Trying source build...`,
+    );
+    return false;
+  }
+
+  const binDir = getBinDir();
+  const binParentDir = path.dirname(binDir);
+  const stagingDir = path.join(binParentDir, `.bin-install-${process.pid}`);
+  const previousDir = path.join(binParentDir, `.bin-previous-${process.pid}`);
+  const expectedSha = expectedSourceSha();
+
+  console.log(`[rescript-patched] Downloading toolchain for ${platformKey}...`);
+
+  try {
+    fs.mkdirSync(binParentDir, { recursive: true });
+    fs.mkdirSync(stagingDir);
+    const sourceShaPath = path.join(stagingDir, SOURCE_SHA_ASSET);
+    await downloadFile(
+      `https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${SOURCE_SHA_ASSET}`,
+      sourceShaPath,
+    );
+    const releasedSha = fs
+      .readFileSync(sourceShaPath, "utf8")
+      .trim()
+      .toLowerCase();
+    if (!expectedSha || !releasedSha.startsWith(expectedSha)) {
+      throw new Error(
+        `Released toolchain ${releasedSha || "has no source SHA"} does not match installed source ${expectedSha || "with unknown SHA"}`,
+      );
+    }
+    for (const binary of BINARIES) {
+      const filename = `${binary}.exe`;
+      const url = `https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${binary}-${platformKey}.exe`;
+      const staged = path.join(stagingDir, filename);
+      await downloadFile(url, staged);
+      fs.chmodSync(staged, 0o755);
+    }
+    if (fs.existsSync(previousDir)) {
+      fs.rmSync(previousDir, { recursive: true, force: true });
+    }
+    if (fs.existsSync(binDir)) {
+      fs.renameSync(binDir, previousDir);
+    }
+    try {
+      fs.renameSync(stagingDir, binDir);
+    } catch (err) {
+      if (fs.existsSync(previousDir) && !fs.existsSync(binDir)) {
+        fs.renameSync(previousDir, binDir);
+      }
+      throw err;
+    }
+    try {
+      fs.rmSync(previousDir, { recursive: true, force: true });
+    } catch (err) {
+      console.warn(
+        `[rescript-patched] Toolchain activated, but the previous directory could not be removed: ${err.message}`,
+      );
+    }
+    console.log(`[rescript-patched] Toolchain installed to ${binDir}`);
+    return true;
+  } catch (err) {
+    fs.rmSync(stagingDir, { recursive: true, force: true });
+    if (fs.existsSync(previousDir) && !fs.existsSync(binDir)) {
+      fs.renameSync(previousDir, binDir);
+    } else if (fs.existsSync(previousDir)) {
+      fs.rmSync(previousDir, { recursive: true, force: true });
+    }
+    console.warn(
+      `[rescript-patched] Download failed: ${err.message}. Trying source build...`,
+    );
+    return false;
+  }
+}
+
+function buildFromSource() {
+  console.log(`[rescript-patched] Building toolchain from source...`);
+  try {
+    const rootDir = path.join(__dirname, "..");
+    execSync("make", { cwd: rootDir, stdio: "inherit" });
+    console.log(`[rescript-patched] Source build completed.`);
+    return true;
+  } catch (err) {
+    console.error(`[rescript-patched] Source build failed: ${err.message}`);
+    return false;
+  }
+}
+
+async function main() {
+  if (isSourceCheckout()) {
+    console.log(
+      `[rescript-patched] Source checkout detected, skipping install.`,
+    );
+    return;
+  }
+
+  if (!expectedSourceSha()) {
+    console.error(
+      `[rescript-patched] Cannot identify package source. For a file: dependency, run "npm run prepack" in its clean source checkout before installing. Source archives must retain the Git-expanded source-sha.txt.`,
+    );
+    process.exit(1);
+    return;
+  }
+
+  if (installedToolchainMatchesExpected()) {
+    console.log(`[rescript-patched] Toolchain already exists, skipping.`);
+    return;
+  }
+
+  const downloaded = await downloadToolchain();
+  if (downloaded) return;
+
+  const built = buildFromSource();
+  if (built) return;
+
+  console.error(
+    `[rescript-patched] FAILED: Could not install the toolchain.\n` +
+      `  - Prebuilt toolchain not available for your platform\n` +
+      `  - Source build failed\n` +
+      `  - Manual fix: build with "make" in the repo root`,
+  );
+  process.exit(1);
+}
+
+main().catch(err => {
+  console.error(`[rescript-patched] Unexpected error: ${err.message}`);
+  process.exit(1);
+});

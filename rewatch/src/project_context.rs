@@ -56,8 +56,8 @@ impl fmt::Debug for ProjectContext {
                 write!(
                     f,
                     "Single project: \"{}\" at \"{}\"",
-                    &self.current_config.name,
-                    &self.current_config.path.to_string_lossy()
+                    self.current_config.name,
+                    self.current_config.path.to_string_lossy()
                 )
             }
             Some(MonoRepoContext::MonorepoRoot {
@@ -70,8 +70,8 @@ impl fmt::Debug for ProjectContext {
                 write!(
                     f,
                     "Monorepo root: \"{}\" at \"{}\" with dependencies:\n  {}\n  and devDependencies:\n {}",
-                    &self.current_config.name,
-                    &self.current_config.path.to_string_lossy(),
+                    self.current_config.name,
+                    self.current_config.path.to_string_lossy(),
                     deps,
                     dev_deps
                 )
@@ -80,8 +80,8 @@ impl fmt::Debug for ProjectContext {
                 write!(
                     f,
                     "MonorepoPackage:\n  \"{}\" at \"{}\"\n  with parent \"{}\" at \"{}\"",
-                    &self.current_config.name,
-                    &self.current_config.path.to_string_lossy(),
+                    self.current_config.name,
+                    self.current_config.path.to_string_lossy(),
                     parent_config.name,
                     parent_config.path.to_string_lossy()
                 )

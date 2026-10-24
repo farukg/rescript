@@ -107,7 +107,7 @@ fn compute_watch_paths(build_state: &BuildCommandState, root: &Path) -> Vec<(Pat
             .or_insert(mode);
     };
 
-    for (_, package) in build_state.build_state.packages.iter() {
+    for package in build_state.build_state.packages.values() {
         if !package.is_local_dep {
             continue;
         }
@@ -462,6 +462,7 @@ async fn async_watch(
                         false,
                         create_sourcedirs,
                         plain_output,
+                        false,
                     );
                     build::write_build_ninja(&build_state);
                     result
@@ -540,6 +541,7 @@ pub fn start(
                     false,
                     create_sourcedirs,
                     plain_output,
+                    false,
                 )
                 .is_ok()
                 {

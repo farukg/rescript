@@ -5,7 +5,7 @@
 
 import * as HooksJS from './Hooks.res.js';
 
-import type {TypedArray2_Uint8Array_t as Js_TypedArray2_Uint8Array_t} from '../src/shims/Js.shim';
+import type {TypedArray2_Uint8Array_t as Js_TypedArray2_Uint8Array_t} from './shims/Js.shim';
 
 export type vehicle = { readonly name: string };
 

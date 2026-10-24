@@ -245,6 +245,15 @@ pub struct BuildArgs {
     /// Watch mode (deprecated, use `rescript watch` instead)
     #[arg(short, default_value_t = false, num_args = 0..=1, hide = true)]
     pub watch: bool,
+
+    /// Abort compilation after the first error.
+    ///
+    /// By default rewatch keeps scheduling every module whose dependencies are
+    /// already compiled, so all diagnosable errors are reported in a single
+    /// build. Pass this flag to restore the early-abort behavior (stop as soon
+    /// as the first compile error is hit).
+    #[arg(long, default_value_t = false)]
+    pub exit_after_first_error: bool,
 }
 
 #[cfg(test)]
@@ -382,6 +391,16 @@ mod tests {
         let args = vec![OsString::from("rescript"), OsString::from_vec(vec![0xff])];
         let err = parse_with_default_from(&args).expect_err("expected clap to report invalid utf8");
         assert_eq!(err.kind(), ErrorKind::InvalidUtf8);
+    }
+
+    #[test]
+    fn build_exit_after_first_error_flag_is_parsed() {
+        let cli = parse(&["rescript", "build", "--exit-after-first-error"]).expect("expected build command");
+
+        match cli.command {
+            Command::Build(build_args) => assert!(build_args.exit_after_first_error),
+            other => panic!("expected build command, got {other:?}"),
+        }
     }
 }
 

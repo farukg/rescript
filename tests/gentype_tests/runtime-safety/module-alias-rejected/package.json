@@ -1,0 +1,11 @@
+{
+  "name": "@tests/gentype-runtime-safety-module-alias-rejected",
+  "private": true,
+  "scripts": {
+    "build": "rescript-legacy build",
+    "clean": "rescript clean"
+  },
+  "dependencies": {
+    "rescript": "workspace:^"
+  }
+}

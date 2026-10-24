@@ -281,7 +281,7 @@ let emit_code_item ~config ~emitters ~module_items_emitter ~env ~file_name
         type_vars: string list;
       }
     end in
-    let type_, hook_type =
+    let type_, hook_type, callable_export =
       match type_ with
       | Function
           ({
@@ -317,7 +317,8 @@ let emit_code_item ~config ~emitters ~module_items_emitter ~env ~file_name
           else ResolvedName.from_string name |> ResolvedName.dot "Props"
         in
         ( Function function_,
-          Some {HookType.props_type; resolved_type_name; type_vars} )
+          Some {HookType.props_type; resolved_type_name; type_vars},
+          false )
       | Function
           ({arg_types = [{a_type = Ident {name} as props_type}]; ret_type} as
            function_)
@@ -347,8 +348,9 @@ let emit_code_item ~config ~emitters ~module_items_emitter ~env ~file_name
             Function function_
           | _ -> type_
         in
-        (comp_type, None)
-      | _ -> (type_, None)
+        (comp_type, None, false)
+      | Function _ -> (type_, None, true)
+      | _ -> (type_, None, false)
     in
 
     resolved_name
@@ -374,12 +376,21 @@ let emit_code_item ~config ~emitters ~module_items_emitter ~env ~file_name
         emit_export_type ~emitters ~config ~type_name_is_interface export_type
       | _ -> emitters
     in
-    let emitters =
+    let runtime_access =
       (file_name_js |> ModuleName.to_string)
       ^ "."
       ^ (module_access_path |> Runtime.emit_module_access_path ~config)
-      |> EmitType.emit_export_const ~config ~doc_string ~early:false ~emitters
-           ~name ~type_ ~type_name_is_interface
+    in
+    let emitters =
+      match (config.runtime_safety, callable_export, type_) with
+      | Strict, true, Function function_ ->
+        runtime_access
+        |> EmitType.emit_export_function ~config ~doc_string ~early:false
+             ~emitters ~name ~function_ ~type_name_is_interface
+      | LegacyEager, _, _ | Strict, false, _ | Strict, true, _ ->
+        runtime_access
+        |> EmitType.emit_export_const ~config ~doc_string ~early:false ~emitters
+             ~name ~type_ ~type_name_is_interface
     in
     let emitters =
       match original_name = default with

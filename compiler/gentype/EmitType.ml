@@ -342,6 +342,50 @@ let emit_export_const ~early ?(comment = "") ~config
      | false -> Emitters.export)
        ~emitters
 
+let emit_export_function ~early ?(comment = "") ~config
+    ?(doc_string = DocString.empty) ~emitters ~name ~function_
+    ~type_name_is_interface line =
+  let {arg_types; ret_type; type_vars} = function_ in
+  let parameters =
+    arg_types
+    |> List.mapi (fun i {a_name; a_type} ->
+           let parameter_name =
+             match a_name with
+             | "" -> "_" ^ string_of_int (i + 1)
+             | name -> name
+           in
+           parameter_name ^ ": "
+           ^ (a_type
+             |> render_type ~config ~indent:None ~type_name_is_interface
+                  ~in_fun_type:true))
+    |> String.concat ", "
+  in
+  let return_type =
+    ret_type
+    |> render_type ~config ~indent:None ~type_name_is_interface
+         ~in_fun_type:false
+  in
+  let arguments =
+    arg_types
+    |> List.mapi (fun i {a_name} ->
+           match a_name with
+           | "" -> "_" ^ string_of_int (i + 1)
+           | name -> name)
+    |> String.concat ", "
+  in
+  (match comment = "" with
+  | true -> comment
+  | false -> "// " ^ comment ^ "\n")
+  ^ DocString.render doc_string
+  ^ "export function " ^ name
+  ^ EmitText.generics_string ~type_vars
+  ^ "(" ^ parameters ^ "): " ^ return_type ^ " { return (" ^ line
+  ^ " as any)(" ^ arguments ^ "); }"
+  |> (match early with
+     | true -> Emitters.export_early
+     | false -> Emitters.export)
+       ~emitters
+
 let emit_export_default ~emitters name =
   "export default " ^ name ^ ";" |> Emitters.export ~emitters
 

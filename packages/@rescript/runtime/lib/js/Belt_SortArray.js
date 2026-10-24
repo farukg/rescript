@@ -86,7 +86,7 @@ function merge(src, src1ofs, src1len, src2, src2ofs, src2len, dst, dstofs, cmp) 
     let s1 = _s1;
     let i1 = _i1;
     if (cmp(s1, s2) <= 0) {
-      dst[d] = s1;
+        dst[d] = s1;
       let i1$1 = i1 + 1 | 0;
       if (i1$1 >= src1r) {
         return Belt_Array.blitUnsafe(src2, i2, dst, d + 1 | 0, src2r - i2 | 0);
@@ -96,7 +96,7 @@ function merge(src, src1ofs, src1len, src2, src2ofs, src2len, dst, dstofs, cmp) 
       _i1 = i1$1;
       continue;
     }
-    dst[d] = s2;
+      dst[d] = s2;
     let i2$1 = i2 + 1 | 0;
     if (i2$1 >= src2r) {
       return Belt_Array.blitUnsafe(src, i1, dst, d + 1 | 0, src1r - i1 | 0);
@@ -124,7 +124,7 @@ function union(src, src1ofs, src1len, src2, src2ofs, src2len, dst, dstofs, cmp) 
     let i1 = _i1;
     let c = cmp(s1, s2);
     if (c < 0) {
-      dst[d] = s1;
+        dst[d] = s1;
       let i1$1 = i1 + 1 | 0;
       let d$1 = d + 1 | 0;
       if (i1$1 < src1r) {
@@ -137,7 +137,7 @@ function union(src, src1ofs, src1len, src2, src2ofs, src2len, dst, dstofs, cmp) 
       return (d$1 + src2r | 0) - i2 | 0;
     }
     if (c === 0) {
-      dst[d] = s1;
+        dst[d] = s1;
       let i1$2 = i1 + 1 | 0;
       let i2$1 = i2 + 1 | 0;
       let d$2 = d + 1 | 0;
@@ -157,7 +157,7 @@ function union(src, src1ofs, src1len, src2, src2ofs, src2len, dst, dstofs, cmp) 
       _i1 = i1$2;
       continue;
     }
-    dst[d] = s2;
+      dst[d] = s2;
     let i2$2 = i2 + 1 | 0;
     let d$3 = d + 1 | 0;
     if (i2$2 < src2r) {
@@ -196,7 +196,7 @@ function intersect(src, src1ofs, src1len, src2, src2ofs, src2len, dst, dstofs, c
       continue;
     }
     if (c === 0) {
-      dst[d] = s1;
+        dst[d] = s1;
       let i1$2 = i1 + 1 | 0;
       let i2$1 = i2 + 1 | 0;
       let d$1 = d + 1 | 0;
@@ -236,7 +236,7 @@ function diff(src, src1ofs, src1len, src2, src2ofs, src2len, dst, dstofs, cmp) {
     let i1 = _i1;
     let c = cmp(s1, s2);
     if (c < 0) {
-      dst[d] = s1;
+        dst[d] = s1;
       let d$1 = d + 1 | 0;
       let i1$1 = i1 + 1 | 0;
       if (i1$1 >= src1r) {
@@ -280,10 +280,10 @@ function insertionSort(src, srcofs, dst, dstofs, len, cmp) {
     let e = src[srcofs + i | 0];
     let j = (dstofs + i | 0) - 1 | 0;
     while (j >= dstofs && cmp(dst[j], e) > 0) {
-      dst[j + 1 | 0] = dst[j];
+        dst[j + 1 | 0] = dst[j];
       j = j - 1 | 0;
     };
-    dst[j + 1 | 0] = e;
+      dst[j + 1 | 0] = e;
   }
 }
 

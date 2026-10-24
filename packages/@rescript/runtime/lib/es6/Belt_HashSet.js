@@ -14,9 +14,9 @@ function copyBucket(hash, h_buckets, ndata_tail, _old_bucket) {
     if (tail !== undefined) {
       tail.next = old_bucket;
     } else {
-      h_buckets[nidx] = old_bucket;
+        h_buckets[nidx] = old_bucket;
     }
-    ndata_tail[nidx] = old_bucket;
+      ndata_tail[nidx] = old_bucket;
     _old_bucket = old_bucket.next;
     continue;
   };
@@ -33,7 +33,7 @@ function remove(h, key) {
   let next_cell = l.next;
   if (eq(l.key, key)) {
     h.size = h.size - 1 | 0;
-    h_buckets[i] = next_cell;
+      h_buckets[i] = next_cell;
     return;
   } else if (next_cell !== undefined) {
     let _prec = l;
@@ -88,7 +88,7 @@ function add0(h, key, hash, eq) {
     addBucket(h, key, l, eq);
   } else {
     h.size = h.size + 1 | 0;
-    h_buckets[i] = {
+      h_buckets[i] = {
       key: key,
       next: undefined
     };

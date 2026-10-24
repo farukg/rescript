@@ -1,0 +1,7 @@
+**/lib/
+*.mjs
+*.cmi
+*.cmt
+*.cmj
+*.ast
+*.asti

@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "allowImportingTsExtensions": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "strict": true,
+    "target": "ES2020"
+  },
+  "include": ["src/**/*.ts", "src/**/*.mjs"]
+}

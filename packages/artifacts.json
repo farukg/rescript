@@ -21,7 +21,12 @@
     "cli/rescript.js",
     "docs/docson/build-schema.json",
     "ninja/COPYING",
-    "package.json"
+    "package.json",
+    "packages/@rescript/packaged-source-sha.txt",
+    "packages/@rescript/source-sha.txt",
+    "scripts/postinstall.cjs",
+    "scripts/preparePackage.cjs",
+    "scripts/sourceIdentity.cjs"
   ],
   "@rescript/runtime": [
     "lib/es6/Belt.js",

@@ -48,23 +48,23 @@ function classify(x) {
 
 function test(x, v) {
   switch (v) {
-    case "Undefined" :
+      case "Undefined" :
       return typeof x === "undefined";
-    case "Null" :
+      case "Null" :
       return x === null;
-    case "Boolean" :
+      case "Boolean" :
       return typeof x === "boolean";
-    case "Number" :
+      case "Number" :
       return typeof x === "number";
-    case "String" :
+      case "String" :
       return typeof x === "string";
-    case "Function" :
+      case "Function" :
       return typeof x === "function";
-    case "Object" :
+      case "Object" :
       return typeof x === "object";
-    case "Symbol" :
+      case "Symbol" :
       return typeof x === "symbol";
-    case "BigInt" :
+      case "BigInt" :
       return typeof x === "bigint";
   }
 }

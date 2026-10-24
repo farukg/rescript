@@ -55,6 +55,11 @@ fn main() -> Result<()> {
             std::process::exit(0);
         }
         cli::Command::Build(build_args) => {
+            eprintln!(
+                "Using farukg/rescript fork binary (rewatch v{})",
+                env!("CARGO_PKG_VERSION")
+            );
+
             if build_args.dev.dev {
                 log::warn!(
                     "`--dev no longer has any effect. Please remove it from your command. It will be removed in a future version."
@@ -75,6 +80,7 @@ fn main() -> Result<()> {
                 true, // create_sourcedirs is now always enabled
                 plain_output,
                 (*build_args.warn_error).clone(),
+                build_args.exit_after_first_error,
             ) {
                 Err(e) => {
                     eprintln!("{:#}", e);

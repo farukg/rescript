@@ -99,6 +99,8 @@ tests/analysis_tests/**/*.bs.js
 
 # package tarballs
 package.tgz
+.ci-artifacts/
+packages/@rescript/packaged-source-sha.txt
 *.exe
 
 # AI Agents

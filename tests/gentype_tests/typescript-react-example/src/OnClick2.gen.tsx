@@ -5,7 +5,7 @@
 
 import * as OnClick2JS from './OnClick2.res.js';
 
-import type {Mouse_t as JsxEvent_Mouse_t} from '../src/shims/JsxEvent.shim';
+import type {Mouse_t as JsxEvent_Mouse_t} from './shims/JsxEvent.shim';
 
 export type props<onClick> = { readonly onClick: onClick };
 

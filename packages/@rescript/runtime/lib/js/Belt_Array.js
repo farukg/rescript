@@ -26,7 +26,7 @@ function getOrThrow(arr, i) {
 
 function set(arr, i, v) {
   if (i >= 0 && i < arr.length) {
-    arr[i] = v;
+      arr[i] = v;
     return true;
   } else {
     return false;
@@ -45,13 +45,13 @@ function setOrThrow(arr, i, v) {
       Error: new Error()
     };
   }
-  arr[i] = v;
+    arr[i] = v;
 }
 
 function swapUnsafe(xs, i, j) {
   let tmp = xs[i];
-  xs[i] = xs[j];
-  xs[j] = tmp;
+    xs[i] = xs[j];
+    xs[j] = tmp;
 }
 
 function shuffleInPlace(xs) {
@@ -80,7 +80,7 @@ function reverse(xs) {
   let len = xs.length;
   let result = new Array(len);
   for (let i = 0; i < len; ++i) {
-    result[i] = xs[(len - 1 | 0) - i | 0];
+      result[i] = xs[(len - 1 | 0) - i | 0];
   }
   return result;
 }
@@ -91,7 +91,7 @@ function make(l, f) {
   }
   let res = new Array(l);
   for (let i = 0; i < l; ++i) {
-    res[i] = f;
+      res[i] = f;
   }
   return res;
 }
@@ -102,7 +102,7 @@ function makeBy(l, f) {
   }
   let res = new Array(l);
   for (let i = 0; i < l; ++i) {
-    res[i] = f(i);
+      res[i] = f(i);
   }
   return res;
 }
@@ -120,7 +120,7 @@ function range(start, finish) {
   }
   let arr = new Array(cut + 1 | 0);
   for (let i = 0; i <= cut; ++i) {
-    arr[i] = start + i | 0;
+      arr[i] = start + i | 0;
   }
   return arr;
 }
@@ -134,7 +134,7 @@ function rangeBy(start, finish, step) {
   let arr = new Array(nb);
   let cur = start;
   for (let i = 0; i < nb; ++i) {
-    arr[i] = cur;
+      arr[i] = cur;
     cur = cur + step | 0;
   }
   return arr;
@@ -146,9 +146,9 @@ function zip(xs, ys) {
   let len = Primitive_int.min(lenx, leny);
   let s = new Array(len);
   for (let i = 0; i < len; ++i) {
-    s[i] = [
-      xs[i],
-      ys[i]
+      s[i] = [
+        xs[i],
+        ys[i]
     ];
   }
   return s;
@@ -160,7 +160,7 @@ function zipBy(xs, ys, f) {
   let len = Primitive_int.min(lenx, leny);
   let s = new Array(len);
   for (let i = 0; i < len; ++i) {
-    s[i] = f(xs[i], ys[i]);
+      s[i] = f(xs[i], ys[i]);
   }
   return s;
 }
@@ -170,10 +170,10 @@ function concat(a1, a2) {
   let l2 = a2.length;
   let a1a2 = new Array(l1 + l2 | 0);
   for (let i = 0; i < l1; ++i) {
-    a1a2[i] = a1[i];
+      a1a2[i] = a1[i];
   }
   for (let i$1 = 0; i$1 < l2; ++i$1) {
-    a1a2[l1 + i$1 | 0] = a2[i$1];
+      a1a2[l1 + i$1 | 0] = a2[i$1];
   }
   return a1a2;
 }
@@ -189,7 +189,7 @@ function concatMany(arrs) {
   for (let j = 0; j < lenArrs; ++j) {
     let cur = arrs[j];
     for (let k = 0, k_finish = cur.length; k < k_finish; ++k) {
-      result[totalLen] = cur[k];
+        result[totalLen] = cur[k];
       totalLen = totalLen + 1 | 0;
     }
   }
@@ -209,7 +209,7 @@ function slice(a, offset, len) {
   }
   let result = new Array(copyLength);
   for (let i = 0; i < copyLength; ++i) {
-    result[i] = a[ofs + i | 0];
+      result[i] = a[ofs + i | 0];
   }
   return result;
 }
@@ -220,7 +220,7 @@ function sliceToEnd(a, offset) {
   let len = lena > ofs ? lena - ofs | 0 : 0;
   let result = new Array(len);
   for (let i = 0; i < len; ++i) {
-    result[i] = a[ofs + i | 0];
+      result[i] = a[ofs + i | 0];
   }
   return result;
 }
@@ -237,19 +237,19 @@ function fill(a, offset, len, v) {
     return;
   }
   for (let i = ofs, i_finish = ofs + fillLength | 0; i < i_finish; ++i) {
-    a[i] = v;
+      a[i] = v;
   }
 }
 
 function blitUnsafe(a1, srcofs1, a2, srcofs2, blitLength) {
   if (srcofs2 <= srcofs1) {
     for (let j = 0; j < blitLength; ++j) {
-      a2[j + srcofs2 | 0] = a1[j + srcofs1 | 0];
+        a2[j + srcofs2 | 0] = a1[j + srcofs1 | 0];
     }
     return;
   }
   for (let j$1 = blitLength - 1 | 0; j$1 >= 0; --j$1) {
-    a2[j$1 + srcofs2 | 0] = a1[j$1 + srcofs1 | 0];
+      a2[j$1 + srcofs2 | 0] = a1[j$1 + srcofs1 | 0];
   }
 }
 
@@ -261,12 +261,12 @@ function blit(a1, ofs1, a2, ofs2, len) {
   let blitLength = Primitive_int.min(len, Primitive_int.min(lena1 - srcofs1 | 0, lena2 - srcofs2 | 0));
   if (srcofs2 <= srcofs1) {
     for (let j = 0; j < blitLength; ++j) {
-      a2[j + srcofs2 | 0] = a1[j + srcofs1 | 0];
+        a2[j + srcofs2 | 0] = a1[j + srcofs1 | 0];
     }
     return;
   }
   for (let j$1 = blitLength - 1 | 0; j$1 >= 0; --j$1) {
-    a2[j$1 + srcofs2 | 0] = a1[j$1 + srcofs1 | 0];
+      a2[j$1 + srcofs2 | 0] = a1[j$1 + srcofs1 | 0];
   }
 }
 
@@ -280,7 +280,7 @@ function map(a, f) {
   let l = a.length;
   let r = new Array(l);
   for (let i = 0; i < l; ++i) {
-    r[i] = f(a[i]);
+      r[i] = f(a[i]);
   }
   return r;
 }
@@ -324,7 +324,7 @@ function keep(a, f) {
   for (let i = 0; i < l; ++i) {
     let v = a[i];
     if (f(v)) {
-      r[j] = v;
+        r[j] = v;
       j = j + 1 | 0;
     }
   }
@@ -339,7 +339,7 @@ function keepWithIndex(a, f) {
   for (let i = 0; i < l; ++i) {
     let v = a[i];
     if (f(v, i)) {
-      r[j] = v;
+        r[j] = v;
       j = j + 1 | 0;
     }
   }
@@ -355,7 +355,7 @@ function keepMap(a, f) {
     let v = a[i];
     let v$1 = f(v);
     if (v$1 !== undefined) {
-      r[j] = Primitive_option.valFromOption(v$1);
+        r[j] = Primitive_option.valFromOption(v$1);
       j = j + 1 | 0;
     }
   }
@@ -373,7 +373,7 @@ function mapWithIndex(a, f) {
   let l = a.length;
   let r = new Array(l);
   for (let i = 0; i < l; ++i) {
-    r[i] = f(i, a[i]);
+      r[i] = f(i, a[i]);
   }
   return r;
 }
@@ -520,10 +520,10 @@ function partition(a, f) {
   for (let ii = 0; ii < l; ++ii) {
     let v = a[ii];
     if (f(v)) {
-      a1[i] = v;
+        a1[i] = v;
       i = i + 1 | 0;
     } else {
-      a2[j] = v;
+        a2[j] = v;
       j = j + 1 | 0;
     }
   }
@@ -541,8 +541,8 @@ function unzip(a) {
   let a2 = new Array(l);
   for (let i = 0; i < l; ++i) {
     let match = a[i];
-    a1[i] = match[0];
-    a2[i] = match[1];
+      a1[i] = match[0];
+      a2[i] = match[1];
   }
   return [
     a1,
@@ -573,7 +573,7 @@ function joinWith(a, sep, toString) {
 function init(n, f) {
   let v = new Array(n);
   for (let i = 0; i < n; ++i) {
-    v[i] = f(i);
+      v[i] = f(i);
   }
   return v;
 }

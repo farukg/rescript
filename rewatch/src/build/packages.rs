@@ -597,7 +597,7 @@ fn extend_with_children(
     filter: &Option<regex::Regex>,
     mut build: AHashMap<String, Package>,
 ) -> AHashMap<String, Package> {
-    for (_key, package) in build.iter_mut() {
+    for package in build.values_mut() {
         let mut map: AHashMap<PathBuf, SourceFileMeta> = AHashMap::new();
         package
             .source_folders

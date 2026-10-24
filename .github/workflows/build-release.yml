@@ -1,0 +1,94 @@
+name: Build and Release Patched Linux Toolchain
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  linux-x64:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.91"
+          targets: x86_64-unknown-linux-musl
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap g++-multilib gcc-multilib mercurial musl-tools rsync cmake
+
+      - uses: ocaml/setup-ocaml@v3.4.8
+        with:
+          ocaml-compiler: ocaml-variants.5.3.0+options,ocaml-option-static
+          opam-pin: false
+          dune-cache: true
+
+      - name: Restore project opam dependencies
+        uses: actions/cache@v4
+        with:
+          path: _opam
+          key: linux-x64-opam-ocaml-5.3-static-${{ hashFiles('*.opam') }}
+
+      - name: Install project dependencies
+        run: |
+          yarn install
+          opam install . --deps-only --with-test
+
+      - name: Build and assemble compiler
+        run: bash scripts/ci/buildStaticCompiler.sh
+
+      - name: Restore rewatch build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            rewatch/target
+          key: patched-linux-x64-rewatch-rust-1.91-${{ hashFiles('rewatch/Cargo.lock', 'rewatch/Cargo.toml') }}-${{ github.sha }}
+          restore-keys: |
+            patched-linux-x64-rewatch-rust-1.91-${{ hashFiles('rewatch/Cargo.lock', 'rewatch/Cargo.toml') }}-
+            patched-linux-x64-rewatch-rust-1.91-
+
+      - name: Build rewatch
+        run: |
+          cargo build --manifest-path rewatch/Cargo.toml --release --target x86_64-unknown-linux-musl
+          mkdir -p rewatch/target/release
+          cp rewatch/target/x86_64-unknown-linux-musl/release/rescript rewatch/target/release/rescript
+          node scripts/copyExes.js --rewatch
+
+      - name: Build ninja
+        run: |
+          LDFLAGS=-static node scripts/buildNinjaBinary.js
+          node scripts/copyExes.js --ninja
+
+      - name: Name release assets
+        run: |
+          mkdir -p release-binaries
+          printf '%s\n' "$GITHUB_SHA" > release-binaries/source-sha.txt
+          for binary in packages/@rescript/linux-x64/bin/*.exe; do
+            name="$(basename "$binary" .exe)"
+            cp "$binary" "release-binaries/${name}-linux-x64.exe"
+          done
+
+      - name: Update patched toolchain release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: patched
+          name: Patched ReScript Toolchains
+          body: Patched Linux toolchain built from ${{ github.sha }}.
+          files: release-binaries/*
+          draft: false
+          prerelease: true
+          fail_on_unmatched_files: true

@@ -5,7 +5,7 @@
 
 import * as VariantsJS from './Variants.res.js';
 
-import type {list} from '../src/shims/RescriptPervasives.shim';
+import type {list} from './shims/RescriptPervasives.shim';
 
 export type weekday = 
     "monday"
