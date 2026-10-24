@@ -5216,8 +5216,13 @@ and print_case ~state (case : Parsetree.case) cmt_tbl =
     | Pexp_construct ({txt = Longident.Lident ("()" | "true" | "false")}, _)
     | Pexp_constant _ | Pexp_ident _ ->
       true
-    | _ when ParsetreeViewer.is_huggable_rhs case.pc_rhs -> true
-    | _ -> false
+    | _ ->
+      (* Redundant single-expression braces are omitted by rhs printing. *)
+      let rhs =
+        if ParsetreeViewer.is_block_expr case.pc_rhs then case.pc_rhs
+        else snd (ParsetreeViewer.process_braces_attr case.pc_rhs)
+      in
+      ParsetreeViewer.is_huggable_rhs rhs
   in
   let should_indent_pattern =
     match case.pc_lhs.ppat_desc with
